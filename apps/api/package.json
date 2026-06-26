@@ -1,0 +1,34 @@
+{
+  "name": "@stackdraft/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "list-pending-facts": "tsx scripts/listPendingFacts.ts",
+    "verify-fact": "tsx scripts/verifyFact.ts",
+    "refresh-pricing": "tsx jobs/refreshPricing.ts",
+    "eval": "tsx src/eval/runner.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "@fastify/cors": "^11.0.0",
+    "@fastify/rate-limit": "^10.2.2",
+    "@fastify/static": "^8.0.4",
+    "@stackdraft/kb": "workspace:*",
+    "better-sqlite3": "^11.8.1",
+    "fastify": "^5.2.1",
+    "zod": "^3.24.1",
+    "zod-to-json-schema": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "tsx": "^4.19.2"
+  }
+}

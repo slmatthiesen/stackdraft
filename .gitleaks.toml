@@ -1,0 +1,25 @@
+# gitleaks config — secret scanning for the pre-publish audit (U14) and CI (U13).
+# Runs on the full tree and full history; the first commit must be clean.
+title = "stackdraft gitleaks"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''sk-ant-[A-Za-z0-9_\-]{20,}'''
+keywords = ["sk-ant-"]
+
+[allowlist]
+description = "Placeholders and examples are not secrets"
+paths = [
+  '''\.env\.example$''',
+  '''(^|/)docs/''',
+]
+regexes = [
+  '''sk-ant-REPLACE_ME''',
+  '''REPLACE_ME''',
+  '''sk-ant-test''',
+  '''test-key''',
+]

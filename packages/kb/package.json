@@ -1,0 +1,18 @@
+{
+  "name": "@stackdraft/kb",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./security-baselines.json": "./security-baselines.json",
+    "./reference-architectures.json": "./reference-architectures.json",
+    "./pricing-facts.seed.json": "./pricing-facts.seed.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

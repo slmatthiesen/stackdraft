@@ -1,0 +1,23 @@
+:root {
+  /* Provisional brand color (operator-provided "to start"). U10 confirms
+     WCAG AA contrast before locking the palette. */
+  --brand: #80ab00;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--brand);
+  color: #14210a;
+}
+
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
