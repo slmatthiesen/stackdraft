@@ -10,6 +10,8 @@
 
 import type { CostDriver } from "../lib/types.js";
 
+/** The FULL cost-driver table. Rendered inside the collapsible CostEstimate's
+ *  "show all" panel (and standalone in tests). */
 export function CostTable({
   drivers,
   assumptions,
@@ -18,8 +20,7 @@ export function CostTable({
   assumptions: string[];
 }): JSX.Element {
   return (
-    <section className="card cost" aria-label="Cost estimate">
-      <h3>Cost estimate</h3>
+    <div className="cost__full">
       <table className="cost__table">
         <thead>
           <tr>
@@ -50,6 +51,6 @@ export function CostTable({
           </ul>
         </details>
       )}
-    </section>
+    </div>
   );
 }

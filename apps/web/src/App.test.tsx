@@ -119,7 +119,7 @@ describe("App (U10 + E6 intake)", () => {
     skipIntake();
 
     // Loading state visible while the (skipped-answers) request is in flight.
-    expect(screen.getByRole("status")).toHaveTextContent(/designing/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/drafting/i);
     const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.answers).toBeUndefined();
     expect(body.round).toBe(2);
@@ -175,7 +175,8 @@ describe("App (U10 + E6 intake)", () => {
 
     await screen.findByText("Key decisions");
     expect(screen.getByText("Serverless (Lambda + API Gateway)")).toBeInTheDocument();
-    expect(screen.getByText(/Alternatives considered: ECS Fargate, EC2 Auto Scaling/i)).toBeInTheDocument();
+    // The field label is "Alternatives" (no "considered"), as its own sentence.
+    expect(screen.getByText(/Alternatives: ECS Fargate, EC2 Auto Scaling/i)).toBeInTheDocument();
   });
 
   it("renders clarification questions, then advances to results after answering", async () => {
@@ -215,7 +216,9 @@ describe("App (U10 + E6 intake)", () => {
     await screen.findByText("Budget single-AZ design");
     // The global floor card heading appears exactly once (not per tab).
     expect(screen.getAllByText(/security floor \(applied to every tier\)/i)).toHaveLength(1);
-    expect(screen.getByText("Encryption at rest with KMS")).toBeInTheDocument();
+    // "KMS" is wrapped as a glossary term, so match the surrounding floor text.
+    expect(screen.getByText(/Encryption at rest with/i)).toBeInTheDocument();
+    expect(screen.getByText("KMS")).toBeInTheDocument();
 
     // Switching tiers does not duplicate the floor — it stays a single global card.
     fireEvent.click(screen.getByRole("tab", { name: /resilient/i }));

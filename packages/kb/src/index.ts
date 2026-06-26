@@ -10,7 +10,20 @@ export interface SecurityBaseline {
   id: string;
   rule: string;
   rationale: string;
+  /** Short one-line floor statement, used as the deterministic securityFloor text. */
+  summary: string;
   source: string;
+}
+
+/**
+ * A curated, static glossary term surfaced as a hover tooltip in the UI (no LLM).
+ * Deterministic product knowledge — version-controlled here, served read-only.
+ */
+export interface GlossaryTerm {
+  /** The term as it appears in output text, e.g. "DLQ", "NAT Gateway". */
+  term: string;
+  /** A concise, plain-language definition (≤ ~2 sentences). */
+  definition: string;
 }
 
 export interface ReferenceArchitecture {

@@ -1,4 +1,4 @@
-import type { ArchitectureResult, Clarification, Tier } from "../schema/architecture.js";
+import type { GeneratedArchitecture, Clarification, Tier } from "../schema/architecture.js";
 
 /**
  * Token accounting surfaced by every provider call so the SpendLedger can debit
@@ -45,8 +45,12 @@ export interface LlmProvider {
   /** Decide whether clarification is needed (≤2 questions) before generating (R2). */
   clarify(description: string, priorAnswers?: string[]): Promise<ProviderResult<Clarification>>;
 
-  /** Generate the three-tier architecture as a validated typed graph (KTD3). */
-  generate(prompt: GroundedPrompt, opts?: GenerateOptions): Promise<ProviderResult<ArchitectureResult>>;
+  /**
+   * Generate the three-tier architecture as a validated typed graph (KTD3). The
+   * result OMITS the security floor — that reusable knowledge is injected
+   * deterministically downstream (see pipeline/securityFloor.ts), not generated.
+   */
+  generate(prompt: GroundedPrompt, opts?: GenerateOptions): Promise<ProviderResult<GeneratedArchitecture>>;
 
   /**
    * Generate idiomatic, REFERENCE-ONLY Terraform (HCL) for a single tier of an

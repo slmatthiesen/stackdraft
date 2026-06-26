@@ -4,6 +4,7 @@
  */
 
 import type { KeyDecision } from "../lib/types.js";
+import { GlossaryText } from "./GlossaryText.js";
 
 export function KeyDecisions({ decisions }: { decisions: KeyDecision[] }): JSX.Element | null {
   if (decisions.length === 0) return null;
@@ -19,12 +20,13 @@ export function KeyDecisions({ decisions }: { decisions: KeyDecision[] }): JSX.E
               {" — "}
               <strong className="decisions__chosen">{d.chosen}</strong>
             </p>
+            {/* Alternatives are their OWN sentence, kept separate from the rationale. */}
             {d.alternativesConsidered.length > 0 && (
-              <p className="decisions__alts">
-                Alternatives considered: {d.alternativesConsidered.join(", ")}
-              </p>
+              <p className="decisions__alts">Alternatives: {d.alternativesConsidered.join(", ")}</p>
             )}
-            <p className="decisions__why">{d.rationale}</p>
+            <p className="decisions__why">
+              <GlossaryText>{d.rationale}</GlossaryText>
+            </p>
           </li>
         ))}
       </ol>

@@ -66,6 +66,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@stackdraft/kb':
+        specifier: workspace:*
+        version: link:../../packages/kb
       mermaid:
         specifier: ^11.4.1
         version: 11.16.0

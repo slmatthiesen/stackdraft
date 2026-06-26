@@ -8,8 +8,8 @@ import Anthropic, {
 import { ClaudeProvider } from "./claude.js";
 import { ProviderError } from "./provider.js";
 import type { GroundedPrompt } from "./provider.js";
-import { ArchitectureResultSchema } from "../schema/architecture.js";
-import type { ArchitectureResult, Clarification, TierName } from "../schema/architecture.js";
+import { GeneratedArchitectureSchema } from "../schema/architecture.js";
+import type { GeneratedArchitecture, ArchitectureResult, Clarification, TierName } from "../schema/architecture.js";
 
 // --- Test doubles -----------------------------------------------------------
 
@@ -120,20 +120,13 @@ function makeTier(name: TierName): ArchitectureResult["tiers"][number] {
   };
 }
 
-function validArchitecture(): ArchitectureResult {
+// The model output OMITS securityFloor (it is injected deterministically
+// downstream); the provider validates against the GENERATED schema, which would
+// reject an unexpected securityFloor field.
+function validArchitecture(): GeneratedArchitecture {
   return {
     assumptions: ["single region"],
     clarificationsUsed: [],
-    securityFloor: [
-      "Encryption at rest with KMS / SSE.",
-      "TLS in transit; HTTPS only.",
-      "Least-privilege IAM, no long-lived keys.",
-      "S3 Block Public Access on.",
-      "Data tier in private subnets.",
-      "Secrets in AWS Secrets Manager.",
-      "Edge protection: CloudFront + WAF.",
-      "CloudTrail + access logging.",
-    ],
     tiers: [makeTier("budget"), makeTier("balanced"), makeTier("resilient")],
     recommendedTier: "balanced",
     recommendationRationale: "Balanced fits moderate, bursty traffic with multi-AZ availability.",
@@ -160,7 +153,7 @@ describe("ClaudeProvider.generate", () => {
 
     const { result, usage } = await makeProvider(client).generate(PROMPT);
 
-    expect(result).toEqual(ArchitectureResultSchema.parse(arch));
+    expect(result).toEqual(GeneratedArchitectureSchema.parse(arch));
     expect(result.tiers.map((t) => t.name)).toEqual(["budget", "balanced", "resilient"]);
     expect(usage.inputTokens).toBe(1200);
     expect(usage.outputTokens).toBe(800);

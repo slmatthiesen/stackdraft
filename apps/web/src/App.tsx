@@ -13,6 +13,7 @@ import { generate, type ApiOutcome } from "./lib/api.js";
 import { ClarifyForm } from "./components/ClarifyForm.js";
 import { IntakeForm } from "./components/IntakeForm.js";
 import { KeyDecisions } from "./components/KeyDecisions.js";
+import { LoadingDraft } from "./components/LoadingDraft.js";
 import { SecurityPanel } from "./components/SecurityPanel.js";
 import { TierTabs } from "./components/TierTabs.js";
 import type { GenerateResponse, TierName } from "./lib/types.js";
@@ -155,11 +156,7 @@ export function App(): JSX.Element {
 
       {phase === "intake" && <IntakeForm onComplete={handleIntake} />}
 
-      {phase === "loading" && (
-        <p className="status" role="status">
-          Designing a safe, costed AWS architecture…
-        </p>
-      )}
+      {phase === "loading" && <LoadingDraft />}
 
       {phase === "error" && (
         <div className="banner banner--error" role="alert">

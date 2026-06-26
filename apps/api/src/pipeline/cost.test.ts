@@ -13,6 +13,7 @@ import {
   formatRange,
   onDemandDisclaimer,
   ASSUMED_MONTHLY_VOLUME,
+  TIER_CAPACITY_MULTIPLIER,
 } from "./cost.js";
 
 const REGION = "us-east-1";
@@ -113,11 +114,15 @@ describe("estimateCosts", () => {
       expect(d.estimateRange).toMatch(/^\$[\d.]+–\$[\d.]+\/mo$/);
     }
 
-    // ALB ($/hr) range computed from the SAME band + cached price (no drift).
+    // ALB ($/hr) range = cached price × band × the BALANCED tier capacity
+    // multiplier (always-on capacity scales with tier redundancy; no drift).
     const albPrice = stores.pricing.get("ALB", REGION).find((r) => r.unit === "hour")!;
     const band = ASSUMED_MONTHLY_VOLUME["hour"]!;
+    const mult = TIER_CAPACITY_MULTIPLIER.balanced;
     const albDriver = balanced.costDrivers.find((d) => d.service === "ALB" && d.unit === "$/hr")!;
-    expect(albDriver.estimateRange).toBe(formatRange(albPrice.usd * band.low, albPrice.usd * band.high));
+    expect(albDriver.estimateRange).toBe(
+      formatRange(albPrice.usd * band.low * mult, albPrice.usd * band.high * mult),
+    );
 
     // The forced NAT-gateway line is present, in its native units, and flagged.
     const natProcessed = balanced.costDrivers.find(
@@ -135,6 +140,57 @@ describe("estimateCosts", () => {
     );
     expect(egress).toBeDefined();
     expect(egress!.note).toMatch(/private-subnet security default/i);
+  });
+
+  it("scales always-on capacity cost by tier (resilient > balanced > budget)", () => {
+    // Same capacity service (ALB) in all three tiers — the only difference is the
+    // tier redundancy multiplier, so the $/hr range must grow budget→balanced→resilient.
+    const sameNodes = [node("ALB")];
+    const differentiated: ArchitectureResult = {
+      assumptions: [],
+      clarificationsUsed: [],
+      securityFloor: SECURITY_FLOOR,
+      ...RECOMMENDATION,
+      tiers: [
+        tier("budget", sameNodes, ["baseline: single-AZ"]),
+        tier("balanced", sameNodes, ["+ multi-AZ"]),
+        tier("resilient", sameNodes, ["+ multi-AZ + read replicas"]),
+      ],
+    };
+
+    const out = estimateCosts(differentiated, stores.pricing, REGION);
+    const albPrice = stores.pricing.get("ALB", REGION).find((r) => r.unit === "hour")!;
+    const band = ASSUMED_MONTHLY_VOLUME["hour"]!;
+    const albRange = (t: Tier): string =>
+      t.costDrivers.find((d) => d.service === "ALB" && d.unit === "$/hr")!.estimateRange;
+
+    const [budget, balanced, resilient] = out.tiers as [Tier, Tier, Tier];
+    expect(albRange(budget)).toBe(formatRange(albPrice.usd * band.low, albPrice.usd * band.high));
+    expect(albRange(balanced)).toBe(formatRange(albPrice.usd * band.low * 2, albPrice.usd * band.high * 2));
+    expect(albRange(resilient)).toBe(formatRange(albPrice.usd * band.low * 3, albPrice.usd * band.high * 3));
+    // ALB is not a VPC-bound datastore and no node tags "private subnet" → no NAT line.
+    expect(budget.costDrivers.some((d) => d.service === "NAT Gateway")).toBe(false);
+  });
+
+  it("surfaces the NAT/egress line on EVERY VPC-bound tier (Aurora/Fargate), not just one", () => {
+    // The old narrow {RDS,ElastiCache,EC2} check missed Aurora/Fargate, so the NAT
+    // line appeared inconsistently across tiers. Both VPC-bound tiers must trip it.
+    const vpcTiers: ArchitectureResult = {
+      assumptions: [],
+      clarificationsUsed: [],
+      securityFloor: SECURITY_FLOOR,
+      ...RECOMMENDATION,
+      tiers: [
+        tier("balanced", [node("ALB"), node("Fargate"), node("Aurora")], ["+ multi-AZ Aurora"]),
+        tier("resilient", [node("ALB"), node("Fargate"), node("Aurora")], ["+ Aurora read replicas"]),
+      ],
+    };
+
+    const out = estimateCosts(vpcTiers, stores.pricing, REGION);
+    for (const t of out.tiers) {
+      expect(t.costDrivers.some((d) => d.service === "NAT Gateway")).toBe(true);
+      expect(t.costDrivers.some((d) => d.service === "Data Transfer")).toBe(true);
+    }
   });
 
   it("does NOT add a NAT/egress line for a tier with no private subnet", () => {

@@ -11,9 +11,10 @@ import { useState } from "react";
 import type { Tier, TierName } from "../lib/types.js";
 import { graphToMermaid } from "../lib/mermaid.js";
 import { DiagramView } from "./DiagramView.js";
-import { CostTable } from "./CostTable.js";
+import { CostEstimate } from "./CostEstimate.js";
 import { CostSummary } from "./CostSummary.js";
 import { ReferenceConfig } from "./ReferenceConfig.js";
+import { GlossaryText } from "./GlossaryText.js";
 
 const TAB_LABELS: Record<TierName, string> = {
   budget: "Budget",
@@ -91,19 +92,23 @@ export function TierTabs({
             <h3>What changes in this tier</h3>
             <ul>
               {tier.delta.map((d, i) => (
-                <li key={i}>{d}</li>
+                <li key={i}>
+                  <GlossaryText>{d}</GlossaryText>
+                </li>
               ))}
             </ul>
           </section>
         )}
 
-        <CostTable drivers={tier.costDrivers} assumptions={assumptions} />
+        <CostEstimate drivers={tier.costDrivers} assumptions={assumptions} />
 
         <section className="card tradeoffs" aria-label="Trade-offs">
           <h3>Trade-offs vs other tiers</h3>
           <ul>
             {tier.tradeoffs.map((t, i) => (
-              <li key={i}>{t}</li>
+              <li key={i}>
+                <GlossaryText>{t}</GlossaryText>
+              </li>
             ))}
           </ul>
         </section>

@@ -509,9 +509,76 @@ body {
   color: #ffd479;
 }
 
+/* ---- glossary tooltips ---- */
+
+.gloss {
+  text-decoration: underline dotted var(--brand-dark);
+  text-underline-offset: 0.18em;
+  cursor: help;
+}
+
+/* ---- cost estimate (lean) ---- */
+
+.cost__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cost__band {
+  font-weight: 700;
+  color: var(--brand-dark);
+  white-space: nowrap;
+}
+
+.cost__top {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.cost__top-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.cost__top-svc {
+  font-weight: 600;
+}
+
+.cost__top-range {
+  color: var(--brand-dark);
+  white-space: nowrap;
+}
+
+.cost__top-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cost__all {
+  margin-top: 0.85rem;
+}
+
+.cost__all summary {
+  cursor: pointer;
+  color: var(--brand-dark);
+  font-weight: 600;
+}
+
+.cost__full {
+  margin-top: 0.75rem;
+}
+
 /* ---- diagram ---- */
 
 .diagram {
+  position: relative;
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
@@ -520,7 +587,191 @@ body {
   overflow-x: auto;
 }
 
+/* Fill the card width instead of Mermaid's small intrinsic size. */
+.diagram__svg svg {
+  max-width: 100% !important;
+  width: 100%;
+  height: auto;
+}
+
+.diagram__expand {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 1;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--brand-dark);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.9);
+  color: var(--ink);
+}
+
 .diagram--fallback pre {
   white-space: pre-wrap;
   font-size: 0.85rem;
+}
+
+/* Full-screen expanded diagram */
+.diagram-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(34, 29, 24, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1rem 1rem;
+  animation: modal-fade 0.18s ease both;
+}
+
+@keyframes modal-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.diagram-modal__canvas {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  max-width: 96vw;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+}
+
+/* Render large in the overlay; scroll if it exceeds the viewport. */
+.diagram-modal__canvas svg {
+  max-width: none !important;
+  width: min(2200px, 180vw);
+  height: auto;
+}
+
+.diagram-modal__close {
+  position: fixed;
+  top: 1rem;
+  right: 1.25rem;
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--card);
+  color: var(--ink);
+}
+
+/* ---- loading: drafting animation ---- */
+
+.drafting {
+  text-align: center;
+  margin: 2.5rem auto;
+  max-width: 420px;
+}
+
+.drafting__blueprint {
+  position: relative;
+  height: 64px;
+  margin: 0 auto 1.25rem;
+  width: 180px;
+  border: 1px dashed var(--brand-dark);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(var(--card-border) 1px, transparent 1px) 0 0 / 100% 16px,
+    linear-gradient(90deg, var(--card-border) 1px, transparent 1px) 0 0 / 16px 100%,
+    var(--card);
+  overflow: hidden;
+}
+
+.drafting__node {
+  position: absolute;
+  top: 24px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--brand-dark);
+  opacity: 0.25;
+  animation: node-pulse 1.4s ease-in-out infinite;
+}
+
+.drafting__node--1 {
+  left: 28px;
+}
+.drafting__node--2 {
+  left: 82px;
+  animation-delay: 0.25s;
+}
+.drafting__node--3 {
+  left: 136px;
+  animation-delay: 0.5s;
+}
+
+@keyframes node-pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* A light sweep crossing the blueprint, like a drafting pass. */
+.drafting__sweep {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  animation: sweep 1.8s ease-in-out infinite;
+}
+
+@keyframes sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.drafting__title {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  color: var(--ink);
+  margin: 0;
+}
+
+.drafting__phase {
+  color: var(--muted);
+  margin: 0.35rem 0 0;
+  animation: phase-fade 0.5s ease;
+}
+
+@keyframes phase-fade {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drafting__node,
+  .drafting__sweep,
+  .drafting__phase {
+    animation: none;
+  }
 }

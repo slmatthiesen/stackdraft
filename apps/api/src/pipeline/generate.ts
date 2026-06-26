@@ -11,6 +11,7 @@ import type { ArchitectureResult } from "../schema/architecture.js";
 import type { MemoryStore } from "../store/types.js";
 
 import { assembleGrounding } from "./ground.js";
+import { securityFloorLines } from "./securityFloor.js";
 
 export interface GenerateInput {
   provider: LlmProvider;
@@ -40,7 +41,10 @@ export async function generateArchitecture(input: GenerateInput): Promise<Genera
     memory: input.memory,
   });
 
-  const { result, usage } = await input.provider.generate(prompt, input.opts);
+  const { result: generated, usage } = await input.provider.generate(prompt, input.opts);
+
+  // Inject the deterministic security floor from the KB — the model never emits it.
+  const result: ArchitectureResult = { ...generated, securityFloor: securityFloorLines() };
 
   return {
     result,

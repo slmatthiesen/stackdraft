@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
 import type { LlmProvider, ProviderResult, GroundedPrompt, GenerateOptions, Usage } from "../llm/provider.js";
-import type { ArchitectureResult, Clarification, TierName } from "../schema/architecture.js";
+import type { GeneratedArchitecture, ArchitectureResult, Clarification, TierName } from "../schema/architecture.js";
 import { ArchitectureResultSchema, TIER_NAMES } from "../schema/architecture.js";
 
 import { openTempDb, createStores, type Stores } from "../store/sqlite.js";
 import { seedKnowledgeBase } from "../store/kbLoader.js";
 
 import { generateArchitecture } from "./generate.js";
+import { securityFloorLines } from "./securityFloor.js";
 
 const USAGE: Usage = { inputTokens: 1200, outputTokens: 800, cacheReadTokens: 4096, cacheWriteTokens: 0 };
 
@@ -46,22 +47,12 @@ function makeTier(name: TierName): ArchitectureResult["tiers"][number] {
   };
 }
 
-const SECURITY_FLOOR = [
-  "Encryption at rest with KMS / SSE.",
-  "TLS in transit; HTTPS only.",
-  "Least-privilege IAM, no long-lived keys.",
-  "S3 Block Public Access on.",
-  "Data tier in private subnets, no public route.",
-  "Secrets in AWS Secrets Manager.",
-  "Edge protection: CloudFront + WAF + Shield.",
-  "CloudTrail + access logging + VPC Flow Logs.",
-];
-
-function validArchitecture(): ArchitectureResult {
+// The provider returns the GENERATED shape — no securityFloor (injected by the
+// pipeline from the KB). See securityFloor.ts.
+function validArchitecture(): GeneratedArchitecture {
   return {
     assumptions: ["single region us-east-1"],
     clarificationsUsed: [],
-    securityFloor: SECURITY_FLOOR,
     tiers: TIER_NAMES.map(makeTier),
     recommendedTier: "balanced",
     recommendationRationale: "Balanced fits moderate, bursty traffic with multi-AZ availability.",
@@ -83,10 +74,10 @@ interface FakeProvider {
   calls: { prompts: GroundedPrompt[]; opts: (GenerateOptions | undefined)[] };
 }
 
-function fakeProvider(arch: ArchitectureResult): FakeProvider {
+function fakeProvider(arch: GeneratedArchitecture): FakeProvider {
   const calls: FakeProvider["calls"] = { prompts: [], opts: [] };
   const provider: LlmProvider = {
-    async generate(prompt, opts): Promise<ProviderResult<ArchitectureResult>> {
+    async generate(prompt, opts): Promise<ProviderResult<GeneratedArchitecture>> {
       calls.prompts.push(prompt);
       calls.opts.push(opts);
       return { result: arch, usage: USAGE };
@@ -130,7 +121,7 @@ describe("generateArchitecture", () => {
     expect(calls.prompts).toHaveLength(1);
   });
 
-  it("carries a non-empty global securityFloor and the prompt demands it once (edge, R7)", async () => {
+  it("injects the deterministic security floor from the KB, not the model (edge, R7)", async () => {
     const { provider, calls } = fakeProvider(validArchitecture());
 
     const { result } = await generateArchitecture({
@@ -139,13 +130,15 @@ describe("generateArchitecture", () => {
       description: FULLY_SPECIFIED,
     });
 
-    // LEANER SHAPE: the floor is stated ONCE at the top level, not per tier.
+    // DETERMINISTIC: the floor is injected from the KB, identical every request,
+    // not generated (and re-paid for) by the model.
+    expect(result.securityFloor).toEqual(securityFloorLines());
     expect(result.securityFloor.length).toBeGreaterThan(0);
     expect(result.securityFloor.every((n) => n.trim().length > 0)).toBe(true);
-    // The system prompt mandates the floor be emitted once in securityFloor.
+    // The system prompt tells the model NOT to emit the floor (it's injected).
     const prefix = calls.prompts[0]?.staticPrefix ?? "";
-    expect(prefix).toContain("securityFloor");
     expect(prefix.toLowerCase()).toContain("safe-by-default");
+    expect(prefix.toLowerCase()).toContain("injected");
   });
 
   it("drives burst mechanisms for a high-throughput description (edge, R8)", async () => {

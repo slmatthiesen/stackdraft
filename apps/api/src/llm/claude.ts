@@ -3,12 +3,12 @@ import type { z } from "zod";
 
 import type { Config } from "../config.js";
 import {
-  ArchitectureResultSchema,
+  GeneratedArchitectureSchema,
   ClarificationSchema,
   architectureJsonSchema,
   clarificationJsonSchema,
 } from "../schema/architecture.js";
-import type { ArchitectureResult, Clarification, Tier } from "../schema/architecture.js";
+import type { GeneratedArchitecture, Clarification, Tier } from "../schema/architecture.js";
 import { ProviderError } from "./provider.js";
 import type {
   GenerateOptions,
@@ -92,7 +92,7 @@ export class ClaudeProvider implements LlmProvider {
   async generate(
     prompt: GroundedPrompt,
     opts?: GenerateOptions,
-  ): Promise<ProviderResult<ArchitectureResult>> {
+  ): Promise<ProviderResult<GeneratedArchitecture>> {
     const maxTokens = opts?.maxTokens ?? this.settings.maxTokens;
     const effort = opts?.effort ?? this.settings.effort;
     // KTD11: the cache breakpoint sits ONLY on the static prefix (system prompt
@@ -119,7 +119,7 @@ export class ClaudeProvider implements LlmProvider {
       },
     };
 
-    return this.structuredCall(params, ArchitectureResultSchema);
+    return this.structuredCall(params, GeneratedArchitectureSchema);
   }
 
   async clarify(

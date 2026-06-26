@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./security-baselines.json": "./security-baselines.json",
     "./reference-architectures.json": "./reference-architectures.json",
-    "./pricing-facts.seed.json": "./pricing-facts.seed.json"
+    "./pricing-facts.seed.json": "./pricing-facts.seed.json",
+    "./glossary.json": "./glossary.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

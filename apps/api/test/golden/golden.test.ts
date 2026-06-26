@@ -104,14 +104,22 @@ describe("runEval over the golden set (fake provider, no network)", () => {
 
     const report = await runEval({ provider, memory: stores.memory });
 
-    // The dropped baseline trips every prompt → pass-rate collapses below the floor.
+    // The dropped queue resilience trips every prompt → pass-rate collapses below
+    // the floor. NOTE: the security floor is now injected DETERMINISTICALLY by the
+    // pipeline, so a model can no longer regress it — `securityFloorCoversAllBaselines`
+    // is correct by construction through generation. The gate's regression-detection
+    // is therefore demonstrated via a property that IS still model-controlled
+    // (queue DLQ + idempotency), which is the realistic regression surface now.
     expect(report.passRate).toBe(0);
     expect(report.passRate).toBeLessThan(PASS_RATE_FLOOR);
     // The specific property that flipped is reported per prompt.
     const sample = report.perPrompt[0];
     expect(sample).toBeDefined();
-    const baselineProp = sample?.properties.find((r) => r.name === "securityFloorCoversAllBaselines");
-    expect(baselineProp?.ok).toBe(false);
+    const queueProp = sample?.properties.find((r) => r.name === "queuesAreResilient");
+    expect(queueProp?.ok).toBe(false);
+    // And the deterministic floor still passes through generation (correct by construction).
+    const floorProp = sample?.properties.find((r) => r.name === "securityFloorCoversAllBaselines");
+    expect(floorProp?.ok).toBe(true);
   });
 
   it("respects an injected prompt subset and a custom property aggregator", async () => {

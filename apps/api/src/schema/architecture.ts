@@ -88,26 +88,40 @@ export const KeyDecisionSchema = z
   })
   .strict();
 
+// DETERMINISTIC FLOOR: the safe-by-default security floor is NO LONGER generated
+// by the model — it is reusable knowledge injected from `@stackdraft/kb`
+// (security-baselines.json summaries) after generation. So the LLM output schema
+// (`GeneratedArchitectureSchema`) omits `securityFloor`, and the full downstream
+// type (`ArchitectureResultSchema`) adds it back. This is the main cost lever:
+// the model stops re-emitting (and re-paying for) ~8 fixed lines every request,
+// and the floor is correct by construction instead of by re-reasoning.
+const generatedShape = {
+  assumptions: z.array(z.string()),
+  clarificationsUsed: z.array(z.string()),
+  tiers: z.array(TierSchema).length(3).describe("Exactly three tiers: budget, balanced, resilient."),
+  recommendedTier: z
+    .enum(TIER_NAMES)
+    .describe("The single tier to actually ship for THIS workload — the opinionated recommendation."),
+  recommendationRationale: z
+    .string()
+    .describe("1–2 sentences justifying why that tier fits this specific problem (traffic, availability, compliance)."),
+  keyDecisions: z
+    .array(KeyDecisionSchema)
+    .describe("The handful of load-bearing decisions: chosen vs alternatives + why, framed through the WAF pillars."),
+} as const;
+
+/** What the LLM returns — everything EXCEPT the deterministic security floor. */
+export const GeneratedArchitectureSchema = z.object(generatedShape).strict();
+
+/** The full result the backend assembles: generated graph + injected security floor. */
 export const ArchitectureResultSchema = z
   .object({
-    assumptions: z.array(z.string()),
-    clarificationsUsed: z.array(z.string()),
-    // LEANER SHAPE: the safe-by-default floor (the 8 baselines) stated ONCE here,
-    // applying to ALL tiers — instead of repeating the whole security posture in
-    // every tier's prose. Short lines, one per baseline.
+    ...generatedShape,
+    // Injected deterministically from the KB — the safe-by-default floor (the 8
+    // baselines) stated ONCE, applying to ALL tiers.
     securityFloor: z
       .array(z.string())
       .describe("The safe-by-default floor (the 8 security baselines) stated once; applies to every tier."),
-    tiers: z.array(TierSchema).length(3).describe("Exactly three tiers: budget, balanced, resilient."),
-    recommendedTier: z
-      .enum(TIER_NAMES)
-      .describe("The single tier to actually ship for THIS workload — the opinionated recommendation."),
-    recommendationRationale: z
-      .string()
-      .describe("1–2 sentences justifying why that tier fits this specific problem (traffic, availability, compliance)."),
-    keyDecisions: z
-      .array(KeyDecisionSchema)
-      .describe("The handful of load-bearing decisions: chosen vs alternatives + why, framed through the WAF pillars."),
   })
   .strict();
 
@@ -116,6 +130,7 @@ export type ArchitectureEdge = z.infer<typeof EdgeSchema>;
 export type CostDriver = z.infer<typeof CostDriverSchema>;
 export type Tier = z.infer<typeof TierSchema>;
 export type KeyDecision = z.infer<typeof KeyDecisionSchema>;
+export type GeneratedArchitecture = z.infer<typeof GeneratedArchitectureSchema>;
 export type ArchitectureResult = z.infer<typeof ArchitectureResultSchema>;
 
 /** Clarification gate result (R2). */
@@ -128,10 +143,11 @@ export const ClarificationSchema = z
 
 export type Clarification = z.infer<typeof ClarificationSchema>;
 
-/** JSON Schema for `output_config.format` (structured generation). */
+/** JSON Schema for `output_config.format` (structured generation). Uses the
+ *  GENERATED schema (no securityFloor) — the floor is injected deterministically. */
 export function architectureJsonSchema(): Record<string, unknown> {
-  return zodToJsonSchema(ArchitectureResultSchema, {
-    name: "ArchitectureResult",
+  return zodToJsonSchema(GeneratedArchitectureSchema, {
+    name: "GeneratedArchitecture",
     target: "jsonSchema7",
     $refStrategy: "none",
   }) as Record<string, unknown>;

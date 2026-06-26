@@ -24,8 +24,36 @@
 import pricingFacts from "@stackdraft/kb/pricing-facts.seed.json" with { type: "json" };
 import type { PricingFact } from "@stackdraft/kb";
 
-import type { ArchitectureResult, CostDriver, Tier } from "../schema/architecture.js";
+import type { ArchitectureResult, CostDriver, Tier, TierName } from "../schema/architecture.js";
 import type { PriceRecord, PricingStore } from "../store/types.js";
+
+/**
+ * Per-tier REDUNDANCY multiplier on always-on capacity (KTD6). The three tiers
+ * differ along the robustness axis — single-AZ → multi-AZ → multi-AZ + replicas /
+ * provisioned concurrency / backups — and that robustness costs real money, so a
+ * resilient tier must NOT show the same per-service ranges as budget. We model it
+ * deterministically: the base volume band captures within-tier volume uncertainty,
+ * and this multiplier scales the always-on CAPACITY units (compute hours, LB
+ * hours, stored GB incl. replicas/backups, cross-AZ replication) by tier. Request-
+ * and throughput-priced units (per-1k-*, GB-seconds, per-MAU, internet egress)
+ * track the WORKLOAD, not redundancy, so they are NOT multiplied — the same
+ * traffic costs the same to serve regardless of tier.
+ */
+export const TIER_CAPACITY_MULTIPLIER: Record<TierName, number> = {
+  budget: 1,
+  balanced: 2,
+  resilient: 3,
+};
+
+/** Native units whose cost scales with tier redundancy (see multiplier above). */
+export const CAPACITY_UNITS = new Set<string>([
+  "hour",
+  "lcu-hour",
+  "vcpu-hour",
+  "gb-hour",
+  "gb-month",
+  "gb-cross-az",
+]);
 
 /** Assumed MONTHLY consumption per native unit, used to turn a per-unit list
  *  price into a range. Numbers are the count of native units consumed per month
@@ -182,11 +210,14 @@ function driversForService(
   region: string,
   pricing: PricingStore,
   isPrivateSubnetDefault: boolean,
+  capacityMultiplier: number,
 ): CostDriver[] {
   const { records, approximate } = lookupPrices(service, region, pricing);
   return records.map((r) => {
     const band = ASSUMED_MONTHLY_VOLUME[r.unit] ?? DEFAULT_BAND;
-    const estimateRange = formatRange(r.usd * band.low, r.usd * band.high);
+    // Always-on capacity scales with tier redundancy; workload-priced units don't.
+    const mult = CAPACITY_UNITS.has(r.unit) ? capacityMultiplier : 1;
+    const estimateRange = formatRange(r.usd * band.low * mult, r.usd * band.high * mult);
     let note = r.note;
     if (isPrivateSubnetDefault) {
       note =
@@ -201,40 +232,60 @@ function driversForService(
 }
 
 /**
- * Detect a tier that egresses from a private subnet, which forces a NAT gateway
- * + internet-egress recurring cost (R7 #5 / KTD6).
- *
- * LEANER SHAPE: the old per-tier `securityNotes`/`node.purpose` prose is gone, so
- * we read the new lean signals instead — node `security` TAGS + `role`, the tier
- * `delta`, and the global `securityFloor` (where the no-public-data-tier baseline
- * now lives, stated once). Signals: an affirmative private-subnet mention on a
- * node/delta, OR a private-by-default data tier (RDS / ElastiCache / EC2) when the
- * floor mandates a private data tier. We require BOTH the floor signal AND a
- * private data service for the service heuristic so a serverless tier (Lambda +
- * DynamoDB, no VPC, no NAT) does not falsely trip. We deliberately do NOT trip on
- * a bare "NAT" token — it appears in negative phrasing too ("no NAT required").
+ * VPC-bound services: any of these implies the tier runs resources in a private
+ * subnet (the no-public-data-tier baseline), which forces the recurring NAT
+ * gateway + internet-egress cost. Matched as substrings against the node's AWS
+ * service + role, so marketing prefixes and exact spelling don't matter. This is
+ * the BROAD, deterministic discriminator that replaces the old narrow {RDS,
+ * ElastiCache, EC2} set — the bug was that a tier using Aurora / Fargate / ECS /
+ * OpenSearch (all VPC-bound, all private-subnet) did NOT trip, so the NAT/egress
+ * line appeared inconsistently across tiers. A pure-serverless tier (Lambda +
+ * DynamoDB + S3, no VPC) matches none of these and correctly shows no NAT.
  */
-function egressesFromPrivateSubnet(tier: Tier, securityFloor: readonly string[]): boolean {
+const VPC_PRIVATE_SERVICE_KEYWORDS = [
+  "rds",
+  "aurora",
+  "elasticache",
+  "opensearch",
+  "elasticsearch",
+  "redshift",
+  "ec2",
+  "fargate",
+  "ecs",
+  "eks",
+  "msk",
+  "kafka",
+  "neptune",
+  "documentdb",
+  "memorydb",
+  "emr",
+] as const;
+
+/**
+ * Detect a tier that egresses from a private subnet, which forces a NAT gateway
+ * + internet-egress recurring cost (R7 #5 / KTD6) — surfaced CONSISTENTLY across
+ * every tier that runs VPC-bound services, not just whichever tier the model
+ * happened to tag "private subnet".
+ *
+ * Signals (either trips it): an affirmative private-subnet mention on a node tag /
+ * role / delta, OR any VPC-bound service in the tier (the deterministic signal
+ * that doesn't depend on the model's tagging being consistent). We deliberately
+ * do NOT trip on a bare "NAT" token — it appears in negative phrasing too
+ * ("no NAT required").
+ */
+function egressesFromPrivateSubnet(tier: Tier): boolean {
   const tierSurface = [...tier.delta, ...tier.nodes.flatMap((n) => [n.role, ...n.security])]
     .join(" ")
     .toLowerCase();
   if (/private[ -]?subnet/.test(tierSurface)) return true;
 
-  const floorForcesPrivateData = /private[ -]?subnet|no public data|public data/.test(
-    securityFloor.join(" ").toLowerCase(),
-  );
-  if (!floorForcesPrivateData) return false;
-
-  const services = new Set(tier.nodes.map((n) => normalizeService(n.awsService)));
-  return services.has("RDS") || services.has("ElastiCache") || services.has("EC2");
+  return tier.nodes.some((n) => {
+    const serviceSurface = `${n.awsService} ${n.role}`.toLowerCase();
+    return VPC_PRIVATE_SERVICE_KEYWORDS.some((kw) => serviceSurface.includes(kw));
+  });
 }
 
-function estimateTier(
-  tier: Tier,
-  pricing: PricingStore,
-  region: string,
-  securityFloor: readonly string[],
-): Tier {
+function estimateTier(tier: Tier, pricing: PricingStore, region: string): Tier {
   const drivers: CostDriver[] = [];
   const seen = new Set<string>();
   const add = (d: CostDriver): void => {
@@ -244,17 +295,19 @@ function estimateTier(
     drivers.push(d);
   };
 
+  const capacityMultiplier = TIER_CAPACITY_MULTIPLIER[tier.name];
+
   const services = uniqueOrdered(tier.nodes.map((n) => normalizeService(n.awsService)));
   for (const service of services) {
-    for (const d of driversForService(service, region, pricing, false)) add(d);
+    for (const d of driversForService(service, region, pricing, false, capacityMultiplier)) add(d);
   }
 
   // Surface the recurring NAT/egress cost the private-subnet default imposes,
   // even though no node "is" the NAT gateway — hiding it would make the secure
   // choice look free (KTD6).
-  if (egressesFromPrivateSubnet(tier, securityFloor)) {
+  if (egressesFromPrivateSubnet(tier)) {
     for (const service of DATA_TRANSFER_DEFAULT_SERVICES) {
-      for (const d of driversForService(service, region, pricing, true)) add(d);
+      for (const d of driversForService(service, region, pricing, true, capacityMultiplier)) add(d);
     }
   }
 
@@ -283,7 +336,7 @@ export function estimateCosts(
   pricing: PricingStore,
   region: string,
 ): ArchitectureResult {
-  const tiers = result.tiers.map((tier) => estimateTier(tier, pricing, region, result.securityFloor));
+  const tiers = result.tiers.map((tier) => estimateTier(tier, pricing, region));
   const disclaimer = onDemandDisclaimer(region);
   const assumptions = result.assumptions.includes(disclaimer)
     ? result.assumptions
