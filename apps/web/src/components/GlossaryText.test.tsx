@@ -7,7 +7,7 @@ describe("GlossaryText", () => {
     render(<GlossaryText>Add a DLQ to the queue</GlossaryText>);
     const abbr = screen.getByText("DLQ");
     expect(abbr.tagName).toBe("ABBR");
-    expect(abbr.getAttribute("title")?.toLowerCase()).toContain("dead-letter");
+    expect(abbr.getAttribute("data-tip")?.toLowerCase()).toContain("dead-letter");
   });
 
   it("leaves text with no known terms as a single plain run", () => {

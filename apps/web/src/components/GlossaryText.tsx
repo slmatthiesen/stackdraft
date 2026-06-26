@@ -11,7 +11,9 @@ import { splitByTerms } from "../lib/glossary.js";
 function renderGlossary(text: string, keyPrefix: string): ReactNode[] {
   return splitByTerms(text).map((p, i) =>
     p.definition ? (
-      <abbr key={`${keyPrefix}-${i}`} className="gloss" title={p.definition}>
+      // data-tip drives the CSS tooltip (instant + reliable, unlike the native
+      // title attr). tabIndex makes it keyboard-focusable so the tip shows on focus.
+      <abbr key={`${keyPrefix}-${i}`} className="gloss" tabIndex={0} data-tip={p.definition}>
         {p.text}
       </abbr>
     ) : (

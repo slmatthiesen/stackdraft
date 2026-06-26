@@ -53,9 +53,9 @@ body {
 }
 
 .app {
-  max-width: 920px;
+  max-width: 880px;
   margin: 0 auto;
-  padding: 2rem 1rem 4rem;
+  padding: 2.5rem 1.25rem 5rem;
 }
 
 /* ---- header / prompt-to-goal animation ---- */
@@ -222,8 +222,8 @@ body {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
-  padding: 1.25rem 1.5rem;
-  margin: 1rem 0;
+  padding: 1.5rem 1.75rem;
+  margin: 1.5rem 0;
   color: var(--ink);
   box-shadow: var(--card-shadow);
 }
@@ -231,6 +231,28 @@ body {
 .card h2,
 .card h3 {
   margin-top: 0;
+  font-family: var(--serif);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.card h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.card h3 {
+  font-size: 1.08rem;
+  margin-bottom: 0.6rem;
+}
+
+/* Calmer list rhythm in the result cards (clean, scannable). */
+.security li,
+.delta li,
+.tradeoffs li,
+.assumptions li {
+  margin: 0.35rem 0;
 }
 
 .clarify__hint,
@@ -533,9 +555,42 @@ body {
 /* ---- glossary tooltips ---- */
 
 .gloss {
+  position: relative;
   text-decoration: underline dotted var(--brand-dark);
   text-underline-offset: 0.18em;
   cursor: help;
+}
+
+/* Instant CSS tooltip (the native title attr is slow/unreliable). */
+.gloss::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 60;
+  width: max-content;
+  max-width: 280px;
+  white-space: normal;
+  font-family: system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: #fdf8ee;
+  background: var(--ink);
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.gloss:hover::after,
+.gloss:focus::after,
+.gloss:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ---- cost estimate (lean) ---- */
