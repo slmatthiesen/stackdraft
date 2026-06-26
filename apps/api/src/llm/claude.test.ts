@@ -203,6 +203,22 @@ describe("ClaudeProvider.generate", () => {
     expect(badBounds).toEqual([]);
   });
 
+  it("omits output_config.effort for Haiku (which rejects it), keeping the json_schema format", async () => {
+    const { client, parse } = fakeClient();
+    parse.mockResolvedValueOnce(parsedMessage(validArchitecture()));
+
+    const haiku = new ClaudeProvider(client, {
+      model: "claude-haiku-4-5",
+      maxTokens: 8000,
+      effort: "low",
+    });
+    await haiku.generate(PROMPT);
+
+    const params = parse.mock.calls.at(-1)?.[0] as Anthropic.MessageCreateParamsNonStreaming;
+    expect(params.output_config?.effort).toBeUndefined();
+    expect(params.output_config?.format?.type).toBe("json_schema");
+  });
+
   it("propagates cache-token usage so the caller can debit the ledger", async () => {
     const { client, parse } = fakeClient();
     parse.mockResolvedValueOnce(

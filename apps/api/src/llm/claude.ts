@@ -112,11 +112,10 @@ export class ClaudeProvider implements LlmProvider {
         { role: "user", content: [{ type: "text", text: prompt.volatileSuffix }] },
       ],
       // Native structured output: the model is constrained to the architecture
-      // JSON Schema; `effort` tunes generation depth (both new in 0.106).
-      output_config: {
-        effort,
-        format: { type: "json_schema", schema: toOutputSchema(architectureJsonSchema()) },
-      },
+      // JSON Schema; `effort` tunes generation depth (both new in 0.106). Effort
+      // is OMITTED for models that reject it (Haiku 4.5, Sonnet 4.5) — sending it
+      // there is a 400, which is what blocks a naive model swap to Haiku.
+      output_config: buildOutputConfig(this.settings.model, effort, architectureJsonSchema()),
     };
 
     return this.structuredCall(params, GeneratedArchitectureSchema);
@@ -131,10 +130,7 @@ export class ClaudeProvider implements LlmProvider {
       max_tokens: 1024,
       system: CLARIFY_SYSTEM,
       messages: [{ role: "user", content: buildClarifyInput(description, priorAnswers) }],
-      output_config: {
-        effort: this.settings.effort,
-        format: { type: "json_schema", schema: toOutputSchema(clarificationJsonSchema()) },
-      },
+      output_config: buildOutputConfig(this.settings.model, this.settings.effort, clarificationJsonSchema()),
     };
 
     return this.structuredCall(params, ClarificationSchema);
@@ -378,6 +374,30 @@ function describe(err: unknown): string {
  * top-level `{ type: "object", ... }`, so resolve the single named definition
  * (no nested $refs exist — the schemas are emitted with `$refStrategy: "none"`).
  */
+/**
+ * `output_config.effort` is supported on Opus 4.5+ and Sonnet 4.6, but REJECTED
+ * (400) on Haiku 4.5 and Sonnet 4.5. We gate on the model so a config-only swap
+ * to a cheaper/faster model (e.g. Haiku for the cost test) doesn't 400 on every
+ * call. Conservative: omit effort for the known non-supporting families.
+ */
+function supportsEffort(model: string): boolean {
+  const m = model.toLowerCase();
+  if (m.includes("haiku")) return false;
+  if (m.includes("sonnet-4-5")) return false;
+  return true;
+}
+
+/** Build output_config with the JSON-schema format, including `effort` only when
+ *  the model supports it. */
+function buildOutputConfig(
+  model: string,
+  effort: "low" | "medium" | "high",
+  jsonSchema: Record<string, unknown>,
+): Anthropic.MessageCreateParamsNonStreaming["output_config"] {
+  const format = { type: "json_schema" as const, schema: toOutputSchema(jsonSchema) };
+  return supportsEffort(model) ? { effort, format } : { format };
+}
+
 function toOutputSchema(jsonSchema: Record<string, unknown>): Record<string, unknown> {
   const ref = jsonSchema["$ref"];
   const definitions = jsonSchema["definitions"];
