@@ -5,10 +5,14 @@ import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { getConfig, type Config } from "./config.js";
 import { healthRoutes } from "./routes/health.js";
+import { registerApiRoutes, type AppContext } from "./app/context.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export async function buildServer(config: Config = getConfig()): Promise<FastifyInstance> {
+export async function buildServer(
+  config: Config = getConfig(),
+  ctx?: AppContext,
+): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
       level: config.NODE_ENV === "test" ? "silent" : "info",
@@ -19,6 +23,11 @@ export async function buildServer(config: Config = getConfig()): Promise<Fastify
   });
 
   await app.register(healthRoutes);
+
+  // API routes are registered only when an app context is supplied (production
+  // path / route integration tests). Health + static stay context-free so the
+  // server can boot for smoke checks without opening the DB or LLM client.
+  if (ctx) await registerApiRoutes(app, ctx);
 
   // Serve the built SPA when present (production single-container path).
   const webDist = resolve(__dirname, config.WEB_DIST);
@@ -35,7 +44,9 @@ export async function buildServer(config: Config = getConfig()): Promise<Fastify
 
 async function main(): Promise<void> {
   const config = getConfig();
-  const app = await buildServer(config);
+  const { buildAppContext } = await import("./app/context.js");
+  const ctx = buildAppContext(config);
+  const app = await buildServer(config, ctx);
   try {
     await app.listen({ port: config.PORT, host: config.HOST });
   } catch (err) {
