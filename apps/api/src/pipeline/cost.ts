@@ -202,26 +202,39 @@ function driversForService(
 
 /**
  * Detect a tier that egresses from a private subnet, which forces a NAT gateway
- * + internet-egress recurring cost (R7 #5 / KTD6). Signals: an affirmative
- * private-subnet mention, or the presence of a private data tier (RDS /
- * ElastiCache / EC2) that the baseline puts in private subnets. We deliberately
- * do NOT trip on a bare "NAT" token — it appears in negative phrasing too
- * ("no NAT required"), so it is not a reliable signal on its own.
+ * + internet-egress recurring cost (R7 #5 / KTD6).
+ *
+ * LEANER SHAPE: the old per-tier `securityNotes`/`node.purpose` prose is gone, so
+ * we read the new lean signals instead — node `security` TAGS + `role`, the tier
+ * `delta`, and the global `securityFloor` (where the no-public-data-tier baseline
+ * now lives, stated once). Signals: an affirmative private-subnet mention on a
+ * node/delta, OR a private-by-default data tier (RDS / ElastiCache / EC2) when the
+ * floor mandates a private data tier. We require BOTH the floor signal AND a
+ * private data service for the service heuristic so a serverless tier (Lambda +
+ * DynamoDB, no VPC, no NAT) does not falsely trip. We deliberately do NOT trip on
+ * a bare "NAT" token — it appears in negative phrasing too ("no NAT required").
  */
-function egressesFromPrivateSubnet(tier: Tier): boolean {
-  const haystack = [
-    ...tier.securityNotes,
-    ...tier.nodes.flatMap((n) => [n.purpose, ...n.security]),
-  ]
+function egressesFromPrivateSubnet(tier: Tier, securityFloor: readonly string[]): boolean {
+  const tierSurface = [...tier.delta, ...tier.nodes.flatMap((n) => [n.role, ...n.security])]
     .join(" ")
     .toLowerCase();
-  if (/private[ -]?subnet/.test(haystack)) return true;
+  if (/private[ -]?subnet/.test(tierSurface)) return true;
+
+  const floorForcesPrivateData = /private[ -]?subnet|no public data|public data/.test(
+    securityFloor.join(" ").toLowerCase(),
+  );
+  if (!floorForcesPrivateData) return false;
 
   const services = new Set(tier.nodes.map((n) => normalizeService(n.awsService)));
   return services.has("RDS") || services.has("ElastiCache") || services.has("EC2");
 }
 
-function estimateTier(tier: Tier, pricing: PricingStore, region: string): Tier {
+function estimateTier(
+  tier: Tier,
+  pricing: PricingStore,
+  region: string,
+  securityFloor: readonly string[],
+): Tier {
   const drivers: CostDriver[] = [];
   const seen = new Set<string>();
   const add = (d: CostDriver): void => {
@@ -239,7 +252,7 @@ function estimateTier(tier: Tier, pricing: PricingStore, region: string): Tier {
   // Surface the recurring NAT/egress cost the private-subnet default imposes,
   // even though no node "is" the NAT gateway — hiding it would make the secure
   // choice look free (KTD6).
-  if (egressesFromPrivateSubnet(tier)) {
+  if (egressesFromPrivateSubnet(tier, securityFloor)) {
     for (const service of DATA_TRANSFER_DEFAULT_SERVICES) {
       for (const d of driversForService(service, region, pricing, true)) add(d);
     }
@@ -270,7 +283,7 @@ export function estimateCosts(
   pricing: PricingStore,
   region: string,
 ): ArchitectureResult {
-  const tiers = result.tiers.map((tier) => estimateTier(tier, pricing, region));
+  const tiers = result.tiers.map((tier) => estimateTier(tier, pricing, region, result.securityFloor));
   const disclaimer = onDemandDisclaimer(region);
   const assumptions = result.assumptions.includes(disclaimer)
     ? result.assumptions

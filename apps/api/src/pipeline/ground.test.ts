@@ -42,7 +42,7 @@ describe("assembleGrounding — static prefix (cacheable, KTD11)", () => {
   it("instructs burst handling, the NAT/egress callout, and payload-labeled edges", () => {
     const { prompt } = assembleGrounding({ description: DESCRIPTION, memory: stores.memory });
 
-    expect(prompt.staticPrefix).toContain("trivialInCore");
+    expect(prompt.staticPrefix).toContain("trivial-in-core");
     expect(prompt.staticPrefix).toContain("DynamoDB on-demand");
     expect(prompt.staticPrefix.toLowerCase()).toContain("nat");
     expect(prompt.staticPrefix.toLowerCase()).toContain("egress");

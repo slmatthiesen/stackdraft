@@ -1,18 +1,16 @@
-/** U10 / R7 — the tier's safe-by-default security posture. */
+/** R7 — the safe-by-default security floor, stated ONCE and applied to every tier. */
 
-export function SecurityPanel({ notes }: { notes: string[] }): JSX.Element {
+export function SecurityPanel({ floor }: { floor: string[] }): JSX.Element | null {
+  if (floor.length === 0) return null;
+
   return (
-    <section className="card security" aria-label="Security posture">
-      <h3>Security</h3>
-      {notes.length === 0 ? (
-        <p>No security notes provided.</p>
-      ) : (
-        <ul>
-          {notes.map((note, i) => (
-            <li key={i}>{note}</li>
-          ))}
-        </ul>
-      )}
+    <section className="card security" aria-label="Security floor">
+      <h2>Security floor (applied to every tier)</h2>
+      <ul>
+        {floor.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
     </section>
   );
 }

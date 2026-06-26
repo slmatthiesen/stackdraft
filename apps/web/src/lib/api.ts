@@ -32,6 +32,7 @@ export type ApiOutcome =
       kind: "result";
       tiers: Tier[];
       assumptions: string[];
+      securityFloor: string[];
       recommendedTier: TierName;
       recommendationRationale: string;
       keyDecisions: KeyDecision[];
@@ -89,6 +90,7 @@ export async function generate(
     kind: "result",
     tiers,
     assumptions: result.assumptions ?? [],
+    securityFloor: result.securityFloor ?? [],
     // Defaults keep the UI resilient if the backend omits the new fields.
     recommendedTier: result.recommendedTier ?? tiers[0]?.name ?? "balanced",
     recommendationRationale: result.recommendationRationale ?? "",

@@ -22,7 +22,7 @@ const baselines = securityBaselines as SecurityBaseline[];
 
 export type PropertyName =
   | "exactlyThreeTiers"
-  | "everyTierCoversAllBaselines"
+  | "securityFloorCoversAllBaselines"
   | "allEdgesPayloadLabeled"
   | "onDemandDisclaimerPresent"
   | "noBannedServices"
@@ -41,12 +41,12 @@ export type Property = (result: ArchitectureResult) => PropertyResult;
 
 // --- Baseline coverage vocabulary -------------------------------------------
 //
-// Each of the eight seeded baselines maps to a set of distinctive keywords. A
-// tier "covers" a baseline if ANY keyword appears in that tier's security
-// surface (securityNotes + every node's awsService/purpose/security). Matching
-// is case-insensitive substring. New baselines added to the KB without an entry
-// here fall back to keywords derived from their id (so coverage tracking never
-// silently ignores a new rule).
+// Each of the eight seeded baselines maps to a set of distinctive keywords. The
+// LEANER SHAPE states the security floor ONCE, so coverage is asserted against
+// the GLOBAL `securityFloor` (not repeated per tier): the floor "covers" a
+// baseline if ANY keyword appears in it. Matching is case-insensitive substring.
+// New baselines added to the KB without an entry here fall back to keywords
+// derived from their id (so coverage tracking never silently ignores a new rule).
 
 const BASELINE_KEYWORDS: Record<string, readonly string[]> = {
   "encrypt-at-rest": ["at rest", "encrypt", "kms", "sse"],
@@ -63,12 +63,9 @@ function keywordsForBaseline(b: SecurityBaseline): readonly string[] {
   return BASELINE_KEYWORDS[b.id] ?? b.id.split("-");
 }
 
-/** The text a baseline can be evidenced in: the tier's security-bearing fields. */
-function tierSecuritySurface(tier: Tier): string {
-  const nodeText = tier.nodes
-    .map((n) => `${n.awsService} ${n.purpose} ${n.security.join(" ")}`)
-    .join(" ");
-  return `${tier.securityNotes.join(" ")} ${nodeText}`.toLowerCase();
+/** The text a baseline is evidenced in: the global, stated-once security floor. */
+function securityFloorSurface(result: ArchitectureResult): string {
+  return result.securityFloor.join(" ").toLowerCase();
 }
 
 function coversBaseline(surface: string, b: SecurityBaseline): boolean {
@@ -76,22 +73,21 @@ function coversBaseline(surface: string, b: SecurityBaseline): boolean {
 }
 
 /**
- * R7 — every one of the three tiers must collectively reflect ALL eight security
- * baselines. Budget is the minimum *safe* cost, not a security-relaxed tier, so
- * a missing baseline on any tier is a hard fail.
+ * R7 — the GLOBAL `securityFloor` must reflect ALL eight security baselines,
+ * stated once. It applies to every tier (budget included — the minimum *safe*
+ * cost, not a security-relaxed tier), so a baseline missing from the floor is a
+ * hard fail.
  */
-export const everyTierCoversAllBaselines: Property = (result) => {
-  const missing: string[] = [];
-  for (const tier of result.tiers) {
-    const surface = tierSecuritySurface(tier);
-    for (const b of baselines) {
-      if (!coversBaseline(surface, b)) missing.push(`${tier.name}:${b.id}`);
-    }
-  }
+export const securityFloorCoversAllBaselines: Property = (result) => {
+  const surface = securityFloorSurface(result);
+  const missing = baselines.filter((b) => !coversBaseline(surface, b)).map((b) => b.id);
   return {
-    name: "everyTierCoversAllBaselines",
+    name: "securityFloorCoversAllBaselines",
     ok: missing.length === 0,
-    reason: missing.length === 0 ? `all ${baselines.length} baselines covered on every tier` : `uncovered: ${missing.join(", ")}`,
+    reason:
+      missing.length === 0
+        ? `securityFloor covers all ${baselines.length} baselines`
+        : `uncovered: ${missing.join(", ")}`,
   };
 };
 
@@ -142,9 +138,9 @@ export const onDemandDisclaimerPresent: Property = (result) => {
 //   - "root access key"  : long-lived root credentials — violates least-privilege (R7 #3).
 //   - "http://"          : a plaintext endpoint — violates encrypt-in-transit (R7 #2).
 //
-// We scan only the CONCRETE design surface (node service/purpose/security, edge
-// protocol/payload, cost-driver fields) — not securityNotes/tradeoffs prose,
-// which legitimately mention these terms in NEGATED form ("no public bucket").
+// We scan only the CONCRETE design surface (node service/role/security tags, edge
+// protocol/payload, cost-driver fields) — not the delta/tradeoffs prose, which
+// legitimately mention these terms in NEGATED form ("no public bucket").
 // A negation guard further suppresses negated mentions on the scanned surface.
 export const BANNED_SERVICES = [
   "ec2-classic",
@@ -160,7 +156,7 @@ function designSurfaceStrings(result: ArchitectureResult): string[] {
   const out: string[] = [];
   for (const tier of result.tiers) {
     for (const n of tier.nodes) {
-      out.push(n.awsService, n.purpose, ...n.security);
+      out.push(n.awsService, n.role, ...n.security);
     }
     for (const e of tier.edges) {
       out.push(e.protocol, e.payload);
@@ -236,9 +232,12 @@ export const hasKeyDecisions: Property = (result) => {
 //
 // A queue/topic implies at-least-once delivery, so the senior-architect floor is:
 // the tier that introduces it MUST evidence a dead-letter path AND idempotent
-// consumption. We detect a queue by service/purpose keyword, then require both
-// signals somewhere in that tier's combined reasoning surface. Tiers with no
-// queue pass trivially.
+// consumption. LEANER SHAPE: that resilience is now carried in the STRUCTURE —
+// node `security` TAGS (a queue node tagged "DLQ", its consumer tagged "idempotent
+// consumer") plus the tier `delta` and `tradeoffs`. We detect a queue by
+// service/role keyword, then require both signals across that tier's tags + delta
+// + tradeoffs (and we also count the global keyDecisions, which legitimately carry
+// the reasoning). Tiers with no queue pass trivially.
 
 const QUEUE_KEYWORDS = ["sqs", "queue", "sns", "eventbridge", "kinesis", "message"] as const;
 const DLQ_KEYWORDS = ["dead-letter", "dead letter", "dlq"] as const;
@@ -246,19 +245,16 @@ const IDEMPOTENCY_KEYWORDS = ["idempotent", "idempotency", "dedupe", "deduplicat
 
 function tierHasQueue(tier: Tier): boolean {
   return tier.nodes.some((n) => {
-    const surface = `${n.awsService} ${n.purpose}`.toLowerCase();
+    const surface = `${n.awsService} ${n.role}`.toLowerCase();
     return QUEUE_KEYWORDS.some((kw) => surface.includes(kw));
   });
 }
 
-/** The combined free-text reasoning a tier can evidence resilience in. */
+/** The structural surface a tier can evidence queue resilience in: node security
+ *  TAGS + the robustness delta + tradeoffs (the lean replacement for the old
+ *  securityNotes/burstHandling/setupSteps prose). */
 function tierResilienceSurface(tier: Tier): string {
-  return [
-    ...tier.securityNotes,
-    ...tier.burstHandling,
-    ...tier.setupSteps,
-    ...tier.tradeoffs,
-  ]
+  return [...tier.nodes.flatMap((n) => n.security), ...tier.delta, ...tier.tradeoffs]
     .join(" ")
     .toLowerCase();
 }
@@ -295,7 +291,7 @@ export const exactlyThreeTiers: Property = (result) => {
 
 export const ALL_PROPERTIES: readonly Property[] = [
   exactlyThreeTiers,
-  everyTierCoversAllBaselines,
+  securityFloorCoversAllBaselines,
   allEdgesPayloadLabeled,
   onDemandDisclaimerPresent,
   noBannedServices,

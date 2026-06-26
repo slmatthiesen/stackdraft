@@ -27,7 +27,7 @@ export const GOLDEN_PROMPTS: readonly GoldenPrompt[] = [
     id: "sl-saas-rest",
     description: "A serverless REST API on Lambda and DynamoDB for a small SaaS; bursty but low volume.",
     category: "serverless",
-    expect: { everyTierCoversAllBaselines: true, allEdgesPayloadLabeled: true, exactlyThreeTiers: true },
+    expect: { securityFloorCoversAllBaselines: true, allEdgesPayloadLabeled: true, exactlyThreeTiers: true },
   },
   {
     id: "sl-mobile-backend",

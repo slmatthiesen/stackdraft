@@ -1,19 +1,18 @@
 /**
  * U10 / R3 — budget / balanced / resilient tabs. Switching a tab re-renders the
- * selected tier's diagram + setup + cost table + security + burst + tradeoffs.
+ * selected tier's summary + diagram + what-changes delta + cost table + tradeoffs.
  *
  * KTD9: the budget tab/section is framed as the "minimum safe cost" — all three
- * tiers carry the full R7 security floor, so budget is never security-relaxed.
+ * tiers carry the full R7 security floor (shown once, globally), so budget is
+ * never security-relaxed.
  */
 
 import { useState } from "react";
 import type { Tier, TierName } from "../lib/types.js";
 import { graphToMermaid } from "../lib/mermaid.js";
 import { DiagramView } from "./DiagramView.js";
-import { SetupSteps } from "./SetupSteps.js";
 import { CostTable } from "./CostTable.js";
 import { CostSummary } from "./CostSummary.js";
-import { SecurityPanel } from "./SecurityPanel.js";
 import { ReferenceConfig } from "./ReferenceConfig.js";
 
 const TAB_LABELS: Record<TierName, string> = {
@@ -87,20 +86,18 @@ export function TierTabs({
 
         <DiagramView chart={graphToMermaid(tier.nodes, tier.edges)} />
 
-        <SetupSteps steps={tier.setupSteps} />
+        {tier.delta.length > 0 && (
+          <section className="card delta" aria-label="What changes in this tier">
+            <h3>What changes in this tier</h3>
+            <ul>
+              {tier.delta.map((d, i) => (
+                <li key={i}>{d}</li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <CostTable drivers={tier.costDrivers} assumptions={assumptions} />
-
-        <SecurityPanel notes={tier.securityNotes} />
-
-        <section className="card burst" aria-label="Burst handling">
-          <h3>Burst handling</h3>
-          <ul>
-            {tier.burstHandling.map((b, i) => (
-              <li key={i}>{b}</li>
-            ))}
-          </ul>
-        </section>
 
         <section className="card tradeoffs" aria-label="Trade-offs">
           <h3>Trade-offs vs other tiers</h3>

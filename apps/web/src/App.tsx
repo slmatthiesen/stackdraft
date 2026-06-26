@@ -13,6 +13,7 @@ import { generate, type ApiOutcome } from "./lib/api.js";
 import { ClarifyForm } from "./components/ClarifyForm.js";
 import { IntakeForm } from "./components/IntakeForm.js";
 import { KeyDecisions } from "./components/KeyDecisions.js";
+import { SecurityPanel } from "./components/SecurityPanel.js";
 import { TierTabs } from "./components/TierTabs.js";
 import type { GenerateResponse, TierName } from "./lib/types.js";
 
@@ -77,6 +78,7 @@ export function App(): JSX.Element {
         setResult({
           tiers: outcome.tiers,
           assumptions: outcome.assumptions,
+          securityFloor: outcome.securityFloor,
           recommendedTier: outcome.recommendedTier,
           recommendationRationale: outcome.recommendationRationale,
           keyDecisions: outcome.keyDecisions,
@@ -187,6 +189,8 @@ export function App(): JSX.Element {
               <p className="recommend__why">{result.recommendationRationale}</p>
             )}
           </section>
+
+          <SecurityPanel floor={result.securityFloor} />
 
           <KeyDecisions decisions={result.keyDecisions} />
 

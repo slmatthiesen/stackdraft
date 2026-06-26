@@ -21,37 +21,47 @@ function makeTier(name: TierName): ArchitectureResult["tiers"][number] {
       {
         id: "api",
         awsService: "API Gateway",
-        purpose: "Front door",
-        security: ["TLS", "WAF", "least-priv role"],
-        scaling: { burst: "throttling + caching", trivialInCore: true },
+        role: "front door",
+        security: ["TLS", "WAF", "throttling", "least-priv role"],
       },
       {
         id: "db",
         awsService: "DynamoDB",
-        purpose: "Primary datastore",
-        security: ["encryption at rest", "least-priv role"],
-        scaling: { burst: "on-demand", trivialInCore: true },
+        role: "primary datastore",
+        security: ["encryption at rest", "on-demand", "least-priv role"],
       },
     ],
     edges: [
       { from: "client", to: "api", payload: "JSON request body", protocol: "HTTPS" },
       { from: "api", to: "db", payload: "item read/write", protocol: "HTTPS" },
     ],
-    setupSteps: ["Create the API", "Create the table"],
     costDrivers: [
       { service: "API Gateway", unit: "per 1k requests", estimateRange: "$0.20–$0.90", note: "" },
-      { service: "NAT Gateway", unit: "$0.045/GB + $/hr", estimateRange: "$32–$70/mo", note: "required by private-subnet default" },
     ],
-    burstHandling: ["built-in: DynamoDB on-demand", "optional: SQS buffering"],
-    securityNotes: [`${name}: full security floor applied; NAT/egress cost noted`],
+    delta:
+      name === "budget"
+        ? ["baseline: single-AZ, DynamoDB on-demand absorbs bursts"]
+        : ["+ multi-AZ", "+ optional SQS buffering for write bursts"],
     tradeoffs: ["vs balanced: cheaper, single-AZ"],
   };
 }
+
+const SECURITY_FLOOR = [
+  "Encryption at rest with KMS / SSE.",
+  "TLS in transit; HTTPS only.",
+  "Least-privilege IAM, no long-lived keys.",
+  "S3 Block Public Access on.",
+  "Data tier in private subnets, no public route.",
+  "Secrets in AWS Secrets Manager.",
+  "Edge protection: CloudFront + WAF + Shield.",
+  "CloudTrail + access logging + VPC Flow Logs.",
+];
 
 function validArchitecture(): ArchitectureResult {
   return {
     assumptions: ["single region us-east-1"],
     clarificationsUsed: [],
+    securityFloor: SECURITY_FLOOR,
     tiers: TIER_NAMES.map(makeTier),
     recommendedTier: "balanced",
     recommendationRationale: "Balanced fits moderate, bursty traffic with multi-AZ availability.",
@@ -120,7 +130,7 @@ describe("generateArchitecture", () => {
     expect(calls.prompts).toHaveLength(1);
   });
 
-  it("every tier carries non-empty securityNotes and the prompt demands it (edge, R7)", async () => {
+  it("carries a non-empty global securityFloor and the prompt demands it once (edge, R7)", async () => {
     const { provider, calls } = fakeProvider(validArchitecture());
 
     const { result } = await generateArchitecture({
@@ -129,13 +139,12 @@ describe("generateArchitecture", () => {
       description: FULLY_SPECIFIED,
     });
 
-    for (const tier of result.tiers) {
-      expect(tier.securityNotes.length).toBeGreaterThan(0);
-      expect(tier.securityNotes.every((n) => n.trim().length > 0)).toBe(true);
-    }
-    // The system prompt mandates non-empty securityNotes + the full floor on every tier.
+    // LEANER SHAPE: the floor is stated ONCE at the top level, not per tier.
+    expect(result.securityFloor.length).toBeGreaterThan(0);
+    expect(result.securityFloor.every((n) => n.trim().length > 0)).toBe(true);
+    // The system prompt mandates the floor be emitted once in securityFloor.
     const prefix = calls.prompts[0]?.staticPrefix ?? "";
-    expect(prefix).toContain("NON-EMPTY securityNotes");
+    expect(prefix).toContain("securityFloor");
     expect(prefix.toLowerCase()).toContain("safe-by-default");
   });
 
@@ -150,13 +159,12 @@ describe("generateArchitecture", () => {
 
     // System prompt carries the burst instruction (trivial-in-core vs option).
     const prefix = calls.prompts[0]?.staticPrefix ?? "";
-    expect(prefix).toContain("trivialInCore");
+    expect(prefix).toContain("trivial-in-core");
     expect(prefix).toContain("DynamoDB on-demand");
 
-    // Canned result expresses burst handling both in-core and as options.
+    // LEANER SHAPE: burst handling is expressed via the tier delta + node tags.
     for (const tier of result.tiers) {
-      expect(tier.burstHandling.length).toBeGreaterThan(0);
-      expect(tier.nodes.some((n) => n.scaling.trivialInCore)).toBe(true);
+      expect(tier.delta.length).toBeGreaterThan(0);
     }
   });
 

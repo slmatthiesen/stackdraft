@@ -23,26 +23,22 @@ function balancedTier(): Tier {
       {
         id: "api",
         awsService: "API Gateway",
-        purpose: "Front door",
-        security: ["TLS", "WAF", "least-priv role"],
-        scaling: { burst: "throttling + caching", trivialInCore: true },
+        role: "front door",
+        security: ["TLS", "WAF", "throttling", "least-priv role"],
       },
       {
         id: "db",
         awsService: "DynamoDB",
-        purpose: "Primary datastore",
-        security: ["encryption at rest", "least-priv role"],
-        scaling: { burst: "on-demand", trivialInCore: true },
+        role: "primary datastore",
+        security: ["encryption at rest", "on-demand", "least-priv role"],
       },
     ],
     edges: [
       { from: "client", to: "api", payload: "JSON request body", protocol: "HTTPS" },
       { from: "api", to: "db", payload: "item read/write", protocol: "HTTPS" },
     ],
-    setupSteps: ["Create the API", "Create the table"],
     costDrivers: [{ service: "API Gateway", unit: "per 1k requests", estimateRange: "$0.20–$0.90", note: "" }],
-    burstHandling: ["built-in: DynamoDB on-demand"],
-    securityNotes: ["balanced: full security floor applied"],
+    delta: ["+ multi-AZ"],
     tradeoffs: ["vs resilient: cheaper, single-region"],
   };
 }

@@ -21,27 +21,37 @@ function node(awsService: string, over: Partial<ArchitectureNode> = {}): Archite
   return {
     id: awsService.toLowerCase().replace(/\s+/g, "-"),
     awsService,
-    purpose: `${awsService} node`,
+    role: `${awsService} node`,
     security: ["TLS", "least-privilege role"],
-    scaling: { burst: "n/a", trivialInCore: true },
     ...over,
   };
 }
 
-function tier(name: Tier["name"], nodes: ArchitectureNode[], securityNotes: string[]): Tier {
+function tier(name: Tier["name"], nodes: ArchitectureNode[], delta: string[]): Tier {
   return {
     name,
     summary: `${name} tier`,
     nodes,
     edges: [],
-    setupSteps: ["step"],
     // LLM placeholder cost drivers — the estimator fills these deterministically.
     costDrivers: [{ service: "placeholder", unit: "?", estimateRange: "?", note: "" }],
-    burstHandling: ["built-in: x"],
-    securityNotes,
+    delta,
     tradeoffs: ["vs other"],
   };
 }
+
+// The global security floor mandates a private data tier (no public data tier);
+// combined with a tier's RDS/ElastiCache/EC2 service it forces the NAT/egress cost.
+const SECURITY_FLOOR = [
+  "Encryption at rest with KMS / SSE.",
+  "TLS in transit; HTTPS only.",
+  "Least-privilege IAM, no long-lived keys.",
+  "S3 Block Public Access on.",
+  "Data tier in private subnets, no public route.",
+  "Secrets in AWS Secrets Manager.",
+  "Edge protection: CloudFront + WAF.",
+  "CloudTrail + access logging.",
+];
 
 // A container tier whose data tier (RDS) sits in a private subnet → NAT/egress
 // cost is forced (R6/R7 #5). A serverless tier with no private subnet → no NAT.
@@ -65,17 +75,22 @@ function result(): ArchitectureResult {
   return {
     assumptions: ["assumes ~1M requests/month"],
     clarificationsUsed: [],
+    securityFloor: SECURITY_FLOOR,
     ...RECOMMENDATION,
     tiers: [
+      // Balanced trips the NAT/egress cost via its RDS data tier + the floor's
+      // private-subnet mandate (no private-subnet tag needed on the node).
       tier(
         "balanced",
         [node("ALB"), node("Fargate"), node("RDS"), node("CloudFront"), node("WAF")],
-        ["Data tier (RDS) in private subnets, no public access; egress via NAT gateway."],
+        ["+ multi-AZ RDS", "+ read replica"],
       ),
+      // Budget is serverless (Lambda + DynamoDB, no VPC) — no private data service,
+      // no private-subnet signal → no NAT/egress line.
       tier(
         "budget",
         [node("Lambda"), node("API Gateway"), node("DynamoDB"), node("S3")],
-        ["No public data stores; Lambda runs outside a VPC so no NAT is required."],
+        ["baseline: serverless, no VPC, no NAT required"],
       ),
     ],
   };
@@ -144,9 +159,10 @@ describe("estimateCosts", () => {
     const serverless: ArchitectureResult = {
       assumptions: [],
       clarificationsUsed: [],
+      securityFloor: SECURITY_FLOOR,
       ...RECOMMENDATION,
       tiers: [
-        tier("budget", [node("Lambda"), node("DynamoDB")], ["No public data stores; no NAT required."]),
+        tier("budget", [node("Lambda"), node("DynamoDB")], ["baseline: serverless, no VPC, no NAT"]),
       ],
     };
 

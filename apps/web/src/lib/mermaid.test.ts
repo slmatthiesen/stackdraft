@@ -2,13 +2,12 @@ import { describe, it, expect } from "vitest";
 import { graphToMermaid, escapeLabel } from "./mermaid.js";
 import type { Node, Edge } from "./types.js";
 
-function node(id: string, awsService: string): Node {
+function node(id: string, awsService: string, role = ""): Node {
   return {
     id,
     awsService,
-    purpose: "",
+    role,
     security: [],
-    scaling: { burst: "", trivialInCore: true },
   };
 }
 
@@ -79,6 +78,18 @@ describe("graphToMermaid (U11 / R4)", () => {
     expect(out).toContain('["client"]');
     expect(out).toContain('["API Gateway"]');
     expect(out.split("\n").filter((l) => l.includes("-->"))).toHaveLength(1);
+  });
+
+  it("enriches the node label with the short role when present", () => {
+    const out = graphToMermaid([node("s3", "S3", "thumbnails")], []);
+    expect(out).toContain('n0["S3 (thumbnails)"]');
+  });
+
+  it("escapes metacharacters inside a node role", () => {
+    const out = graphToMermaid([node("s3", "S3", 'evil "role"')], []);
+    // The only literal quotes are the Mermaid delimiters, not the role text.
+    expect(out).toContain("#34;");
+    expect(out).toMatch(/^\s*n0\[".*"\]$/m);
   });
 
   it("handles an empty graph without error", () => {

@@ -23,26 +23,22 @@ function makeTier(name: TierName): ArchitectureResult["tiers"][number] {
       {
         id: "api",
         awsService: "API Gateway",
-        purpose: "Front door",
-        security: ["TLS", "WAF", "least-priv role"],
-        scaling: { burst: "throttling + caching", trivialInCore: true },
+        role: "front door",
+        security: ["TLS", "WAF", "throttling", "least-priv role"],
       },
       {
         id: "db",
         awsService: "DynamoDB",
-        purpose: "Primary datastore",
-        security: ["encryption at rest", "least-priv role"],
-        scaling: { burst: "on-demand", trivialInCore: true },
+        role: "primary datastore",
+        security: ["encryption at rest", "on-demand", "least-priv role"],
       },
     ],
     edges: [
       { from: "client", to: "api", payload: "JSON request body", protocol: "HTTPS" },
       { from: "api", to: "db", payload: "item read/write", protocol: "HTTPS" },
     ],
-    setupSteps: ["Create the API", "Create the table"],
     costDrivers: [{ service: "API Gateway", unit: "per 1k requests", estimateRange: "$0.20–$0.90", note: "" }],
-    burstHandling: ["built-in: DynamoDB on-demand"],
-    securityNotes: [`${name}: full security floor applied`],
+    delta: name === "budget" ? ["baseline: single-AZ, on-demand"] : ["+ multi-AZ"],
     tradeoffs: ["vs balanced: cheaper, single-AZ"],
   };
 }
@@ -51,6 +47,16 @@ function validArchitecture(): ArchitectureResult {
   return {
     assumptions: ["single region us-east-1"],
     clarificationsUsed: [],
+    securityFloor: [
+      "Encryption at rest with KMS / SSE.",
+      "TLS in transit; HTTPS only.",
+      "Least-privilege IAM, no long-lived keys.",
+      "S3 Block Public Access on.",
+      "Data tier in private subnets.",
+      "Secrets in AWS Secrets Manager.",
+      "Edge protection: CloudFront + WAF.",
+      "CloudTrail + access logging.",
+    ],
     tiers: TIER_NAMES.map(makeTier),
     recommendedTier: "balanced",
     recommendationRationale: "Balanced fits moderate, bursty traffic with multi-AZ availability.",

@@ -13,13 +13,9 @@ export type TierName = (typeof TIER_NAMES)[number];
 export interface Node {
   id: string;
   awsService: string;
-  purpose: string;
+  /** Short label for what this node does (e.g. 'thumbnails') — enriches the diagram label. */
+  role: string;
   security: string[];
-  scaling: {
-    burst: string;
-    /** True when burst handling is baked into the core (trivial add); false when it is an option. */
-    trivialInCore: boolean;
-  };
 }
 
 export interface Edge {
@@ -45,10 +41,9 @@ export interface Tier {
   summary: string;
   nodes: Node[];
   edges: Edge[];
-  setupSteps: string[];
+  /** What this tier adds/changes versus the leaner tiers (R3). */
+  delta: string[];
   costDrivers: CostDriver[];
-  burstHandling: string[];
-  securityNotes: string[];
   tradeoffs: string[];
 }
 
@@ -67,6 +62,8 @@ export interface KeyDecision {
 export interface GenerateResponse {
   tiers: Tier[];
   assumptions: string[];
+  /** The safe-by-default security floor — stated ONCE; applies to every tier (R7). */
+  securityFloor: string[];
   /** The tier the architect leads with — auto-selected and badged in the UI. */
   recommendedTier: TierName;
   recommendationRationale: string;

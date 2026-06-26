@@ -33,6 +33,13 @@ export function escapeLabel(raw: string): string {
     .trim();
 }
 
+/** Node label: AWS service, enriched with the short role when present — e.g. "S3 (thumbnails)". */
+function nodeLabel(node: Node): string {
+  const service = node.awsService || node.id;
+  const role = node.role.trim();
+  return role ? `${service} (${role})` : service;
+}
+
 /** Edge label per R4: "<payload> via <protocol>" (payload alone if no protocol). */
 function edgeLabel(edge: Edge): string {
   const payload = edge.payload.trim();
@@ -67,7 +74,7 @@ export function graphToMermaid(
     }
   };
 
-  for (const node of nodes) register(node.id, node.awsService || node.id);
+  for (const node of nodes) register(node.id, nodeLabel(node));
   // Edge endpoints not declared as nodes become implicit nodes labeled by id.
   for (const edge of edges) {
     register(edge.from, edge.from);

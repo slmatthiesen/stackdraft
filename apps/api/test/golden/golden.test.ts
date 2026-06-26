@@ -8,7 +8,7 @@ import { runEval } from "../../src/eval/runner.js";
 import { goodArchitecture, badArchitecture, fakeProvider } from "./fixtures.js";
 import {
   runAllProperties,
-  everyTierCoversAllBaselines,
+  securityFloorCoversAllBaselines,
   allEdgesPayloadLabeled,
   onDemandDisclaimerPresent,
   noBannedServices,
@@ -32,7 +32,7 @@ describe("property checkers on the known-good result", () => {
   it("every property passes individually", () => {
     for (const property of [
       exactlyThreeTiers,
-      everyTierCoversAllBaselines,
+      securityFloorCoversAllBaselines,
       allEdgesPayloadLabeled,
       onDemandDisclaimerPresent,
       noBannedServices,
@@ -56,11 +56,11 @@ describe("property checkers on the known-good result", () => {
 describe("property checkers detect the known-bad regression", () => {
   const bad = badArchitecture();
 
-  it("everyTierCoversAllBaselines flips to FAIL when a tier drops a baseline", () => {
-    const r = everyTierCoversAllBaselines(bad);
+  it("securityFloorCoversAllBaselines flips to FAIL when the floor drops a baseline", () => {
+    const r = securityFloorCoversAllBaselines(bad);
     expect(r.ok).toBe(false);
-    // The budget tier specifically lost the audit/access-logging baseline.
-    expect(r.reason).toContain("budget:audit-and-access-logging");
+    // The global floor specifically lost the audit/access-logging baseline.
+    expect(r.reason).toContain("audit-and-access-logging");
   });
 
   it("queuesAreResilient flips to FAIL when a queue-bearing tier drops DLQ + idempotency", () => {
@@ -110,7 +110,7 @@ describe("runEval over the golden set (fake provider, no network)", () => {
     // The specific property that flipped is reported per prompt.
     const sample = report.perPrompt[0];
     expect(sample).toBeDefined();
-    const baselineProp = sample?.properties.find((r) => r.name === "everyTierCoversAllBaselines");
+    const baselineProp = sample?.properties.find((r) => r.name === "securityFloorCoversAllBaselines");
     expect(baselineProp?.ok).toBe(false);
   });
 

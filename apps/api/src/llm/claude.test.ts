@@ -107,18 +107,15 @@ function makeTier(name: TierName): ArchitectureResult["tiers"][number] {
       {
         id: "api",
         awsService: "API Gateway",
-        purpose: "Front door",
-        security: ["TLS", "WAF"],
-        scaling: { burst: "throttling", trivialInCore: true },
+        role: "front door",
+        security: ["TLS", "WAF", "throttling"],
       },
     ],
     edges: [{ from: "client", to: "api", payload: "request", protocol: "HTTPS" }],
-    setupSteps: ["Create the API"],
     costDrivers: [
       { service: "API Gateway", unit: "per 1k requests", estimateRange: "$0.20–$0.90", note: "" },
     ],
-    burstHandling: ["built-in: throttling"],
-    securityNotes: ["Safe-by-default posture applied"],
+    delta: ["baseline: single-AZ, throttling absorbs bursts"],
     tradeoffs: ["Cheaper than resilient"],
   };
 }
@@ -127,6 +124,16 @@ function validArchitecture(): ArchitectureResult {
   return {
     assumptions: ["single region"],
     clarificationsUsed: [],
+    securityFloor: [
+      "Encryption at rest with KMS / SSE.",
+      "TLS in transit; HTTPS only.",
+      "Least-privilege IAM, no long-lived keys.",
+      "S3 Block Public Access on.",
+      "Data tier in private subnets.",
+      "Secrets in AWS Secrets Manager.",
+      "Edge protection: CloudFront + WAF.",
+      "CloudTrail + access logging.",
+    ],
     tiers: [makeTier("budget"), makeTier("balanced"), makeTier("resilient")],
     recommendedTier: "balanced",
     recommendationRationale: "Balanced fits moderate, bursty traffic with multi-AZ availability.",

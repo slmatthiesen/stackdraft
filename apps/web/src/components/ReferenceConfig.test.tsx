@@ -14,10 +14,8 @@ const tier: Tier = {
   summary: "Budget",
   nodes: [],
   edges: [],
-  setupSteps: [],
+  delta: [],
   costDrivers: [],
-  burstHandling: [],
-  securityNotes: [],
   tradeoffs: [],
 };
 

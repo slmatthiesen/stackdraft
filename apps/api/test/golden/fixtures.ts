@@ -28,92 +28,66 @@ import { ArchitectureResultSchema, TIER_NAMES } from "../../src/schema/architect
 const USAGE: Usage = { inputTokens: 1500, outputTokens: 1200, cacheReadTokens: 4096, cacheWriteTokens: 0 };
 
 interface TierOptions {
-  /** When false, the audit/access-logging baseline is omitted (regression). */
-  includeAuditLogging?: boolean;
   /**
-   * When false, the queue node stays but its DLQ + idempotency reasoning is
-   * dropped — a regression `queuesAreResilient` must catch (at-least-once
-   * delivery without idempotent consumers / a DLQ is a poison-message footgun).
+   * When false, the queue node stays but its DLQ + idempotency TAGS are dropped —
+   * a regression `queuesAreResilient` must catch (at-least-once delivery without an
+   * idempotent consumer / a DLQ is a poison-message footgun). LEANER SHAPE: the
+   * resilience signal now lives in node `security` tags, not setup-step prose.
    */
   includeQueueResilience?: boolean;
 }
 
 /**
- * Security notes engineered to evidence all eight baselines via keyword match
- * (properties.ts vocabulary). Realistic prose, but every baseline is traceable.
+ * The safe-by-default floor, stated ONCE (LEANER SHAPE): one short line per
+ * baseline, engineered to evidence all eight via the properties.ts keyword
+ * vocabulary. `includeAuditLogging:false` drops the audit/access-logging line so
+ * `securityFloorCoversAllBaselines` flips to fail.
  */
-function securityNotes(name: TierName, opts: TierOptions): string[] {
-  const notes = [
-    "All data encrypted at rest with KMS / SSE (S3 SSE-KMS, DynamoDB and EBS encryption).",
-    "TLS enforced in transit; HTTPS only, plaintext denied via aws:SecureTransport.",
-    "Least-privilege IAM: scoped per-service roles, no wildcard actions, no long-lived keys.",
-    "S3 account-level Block Public Access is on; no bucket can be made public.",
-    "Data tier (DynamoDB/RDS) lives in private subnets with no public route; reachable only from the app tier.",
-    "Credentials and connection strings live in AWS Secrets Manager / SSM Parameter Store.",
-    "Edge protection: CloudFront + AWS WAF managed and rate-based rules; Shield Standard applies automatically.",
+function securityFloor(opts: { includeAuditLogging?: boolean } = {}): string[] {
+  const floor = [
+    "Encryption at rest with KMS / SSE across S3, DynamoDB, and EBS.",
+    "TLS enforced in transit; HTTPS only, plaintext denied.",
+    "Least-privilege IAM roles, no wildcard actions, no long-lived keys.",
+    "S3 account-level Block Public Access on; no bucket can be made public.",
+    "Data tier in private subnets with no public route.",
+    "Credentials in AWS Secrets Manager / SSM Parameter Store.",
+    "Edge protection: CloudFront + AWS WAF + Shield Standard.",
   ];
   if (opts.includeAuditLogging !== false) {
-    notes.push("CloudTrail plus access logging (S3, CloudFront, ALB) and VPC Flow Logs are enabled.");
+    floor.push("CloudTrail + access logging (S3, CloudFront, ALB) + VPC Flow Logs enabled.");
   }
-  if (name === "budget") {
-    notes.push("Budget is the MINIMUM SAFE COST: the full security floor above is kept — never relaxed for price.");
-  }
-  return notes;
+  return floor;
 }
 
 function makeTier(name: TierName, opts: TierOptions = {}): Tier {
+  const queueResilient = opts.includeQueueResilience !== false;
   return {
     name,
-    summary: `${name} tier: a safe-by-default serverless design varying only on the robustness axis.`,
+    summary: `${name} tier: safe-by-default serverless, varying only on the robustness axis.`,
+    // LEANER SHAPE: nodes are structure — service + ≤4-word role + short security
+    // TAGS, no prose. Queue resilience is a TAG on the queue ("DLQ") and its
+    // consumer ("idempotent consumer"), not setup-step narration.
     nodes: [
-      {
-        id: "cdn",
-        awsService: "CloudFront",
-        purpose: "Edge CDN and cache fronting the API and static assets",
-        security: ["AWS WAF managed + rate-based rules", "TLS 1.3", "Shield Standard"],
-        scaling: { burst: "CloudFront caching offloads read-heavy GETs", trivialInCore: true },
-      },
-      {
-        id: "api",
-        awsService: "API Gateway",
-        purpose: "REST front door with request validation",
-        security: ["TLS 1.2+", "request throttling", "least-privilege IAM role"],
-        scaling: { burst: "API Gateway throttling caps protect downstream", trivialInCore: true },
-      },
-      {
-        id: "fn",
-        awsService: "Lambda",
-        purpose: "Business logic compute",
-        security: ["least-privilege IAM execution role", "no long-lived keys"],
-        scaling: { burst: "Lambda reserved concurrency bounds blast radius", trivialInCore: true },
-      },
-      {
-        id: "db",
-        awsService: "DynamoDB",
-        purpose: "Primary datastore in a private subnet",
-        security: ["KMS encryption at rest", "private VPC endpoint", "least-privilege IAM role"],
-        scaling: { burst: "DynamoDB on-demand absorbs read/write spikes", trivialInCore: true },
-      },
-      {
-        id: "assets",
-        awsService: "S3",
-        purpose: "Static assets and user uploads",
-        security: ["S3 Block Public Access", "SSE-KMS at rest", "TLS-only bucket policy"],
-        scaling: { burst: "S3 scales automatically", trivialInCore: true },
-      },
+      { id: "cdn", awsService: "CloudFront", role: "edge CDN + cache", security: ["WAF", "TLS 1.3", "Shield Standard"] },
+      { id: "api", awsService: "API Gateway", role: "REST front door", security: ["TLS", "throttling", "least-priv role"] },
+      { id: "fn", awsService: "Lambda", role: "business logic", security: ["least-priv role", "no long-lived keys"] },
+      { id: "db", awsService: "DynamoDB", role: "primary datastore", security: ["KMS at rest", "private subnet", "least-priv role"] },
+      { id: "assets", awsService: "S3", role: "assets + uploads", security: ["block public access", "SSE-KMS", "TLS-only policy"] },
       {
         id: "queue",
         awsService: "SQS",
-        purpose: "Decouples upload processing from the request path; buffers bursty async work",
-        security: ["SSE-KMS at rest", "TLS in transit", "least-privilege IAM role"],
-        scaling: { burst: "SQS absorbs producer spikes; consumer scales independently", trivialInCore: false },
+        role: "upload job buffer",
+        security: queueResilient
+          ? ["SSE-KMS", "TLS", "DLQ", "visibility-timeout retries"]
+          : ["SSE-KMS", "TLS"],
       },
       {
         id: "worker",
         awsService: "Lambda",
-        purpose: "Idempotent consumer that processes queued upload jobs",
-        security: ["least-privilege IAM execution role", "no long-lived keys"],
-        scaling: { burst: "reserved concurrency bounds blast radius on the worker", trivialInCore: true },
+        role: "thumbnail worker",
+        security: queueResilient
+          ? ["least-priv role", "idempotent consumer", "no long-lived keys"]
+          : ["least-priv role", "no long-lived keys"],
       },
     ],
     edges: [
@@ -125,36 +99,20 @@ function makeTier(name: TierName, opts: TierOptions = {}): Tier {
       { from: "fn", to: "queue", payload: "Upload-processing job message", protocol: "SQS" },
       { from: "queue", to: "worker", payload: "Job message (at-least-once delivery)", protocol: "SQS" },
     ],
-    setupSteps: [
-      "Create the DynamoDB table with encryption and on-demand capacity.",
-      "Deploy the Lambda function with a scoped execution role.",
-      "Create the API Gateway REST API with throttling and TLS.",
-      "Put CloudFront + WAF in front and enable logging.",
-      ...(opts.includeQueueResilience !== false
-        ? [
-            "Create the SQS queue with a redrive policy to a dead-letter queue (maxReceiveCount=5) for poison messages, and alarm on DLQ depth.",
-            "Make the worker idempotent: dedupe on a message idempotency key with a DynamoDB conditional write so at-least-once redelivery is safe; retries use exponential backoff with jitter and per-call timeouts.",
-          ]
-        : ["Create the SQS queue and wire the worker to consume from it."]),
-    ],
     costDrivers: [
       { service: "API Gateway", unit: "per 1k requests", estimateRange: "$0.0035–$0.01", note: "" },
       { service: "Lambda", unit: "per 1k requests + $/GB-s", estimateRange: "$0.02–$0.30", note: "" },
       { service: "DynamoDB", unit: "per 1k RRU/WRU", estimateRange: "$0.13–$0.80", note: "" },
-      {
-        service: "NAT Gateway",
-        unit: "$0.045/GB processed + $/hr",
-        estimateRange: "$32–$70/mo",
-        note: "required by the private-subnet default",
-      },
-      { service: "Data transfer", unit: "$/GB egress", estimateRange: "$0.05–$0.09/GB", note: "internet egress" },
     ],
-    burstHandling: [
-      "built-in: DynamoDB on-demand, API Gateway throttling, CloudFront caching, Lambda reserved concurrency",
-      "optional: SQS buffering in front of the worker for very large write bursts",
-      "note: NAT-gateway processing plus internet egress is a recurring cost of the private-subnet default",
-    ],
-    securityNotes: securityNotes(name, opts),
+    // LEANER SHAPE: delta = what THIS tier adds/changes vs the others (robustness,
+    // incl. burst handling). Budget states the baseline. No DLQ/idempotency words
+    // here — that resilience lives in the node tags so the gate stays real.
+    delta:
+      name === "budget"
+        ? ["baseline: single-AZ, DynamoDB on-demand, Lambda reserved concurrency for burst"]
+        : name === "balanced"
+          ? ["+ multi-AZ", "+ provisioned concurrency on hot paths", "+ CloudWatch dashboards + tracing"]
+          : ["+ read replicas", "+ cross-region failover", "+ EventBridge fan-out", "+ SLO alarms"],
     tradeoffs:
       name === "budget"
         ? ["vs balanced: single-AZ, on-demand only — cheaper, lower availability", "vs resilient: no multi-AZ replication"]
@@ -176,6 +134,7 @@ export function goodArchitecture(): ArchitectureResult {
       "Moderate, bursty traffic unless stated otherwise.",
     ],
     clarificationsUsed: [],
+    securityFloor: securityFloor(),
     tiers: TIER_NAMES.map((name) => makeTier(name)),
     recommendedTier: "balanced",
     recommendationRationale:
@@ -208,9 +167,9 @@ export function goodArchitecture(): ArchitectureResult {
 
 /**
  * A known-BAD result with TWO realistic regressions the gate must catch:
- *   1. the budget tier drops the audit/access-logging baseline
- *      (`everyTierCoversAllBaselines` flips to fail), and
- *   2. every tier keeps its SQS node but drops the DLQ + idempotency reasoning
+ *   1. the GLOBAL securityFloor drops the audit/access-logging baseline
+ *      (`securityFloorCoversAllBaselines` flips to fail), and
+ *   2. every tier keeps its SQS node but drops the DLQ + idempotency TAGS
  *      (`queuesAreResilient` flips to fail) — at-least-once delivery with no
  *      idempotent consumer / DLQ is the classic poison-message footgun.
  * Either alone collapses the aggregate; together they prove the new gate fires.
@@ -218,9 +177,8 @@ export function goodArchitecture(): ArchitectureResult {
 export function badArchitecture(): ArchitectureResult {
   return {
     ...goodArchitecture(),
-    tiers: TIER_NAMES.map((name) =>
-      makeTier(name, { includeAuditLogging: name !== "budget", includeQueueResilience: false }),
-    ),
+    securityFloor: securityFloor({ includeAuditLogging: false }),
+    tiers: TIER_NAMES.map((name) => makeTier(name, { includeQueueResilience: false })),
   };
 }
 

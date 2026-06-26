@@ -13,22 +13,20 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 export const TIER_NAMES = ["budget", "balanced", "resilient"] as const;
 export type TierName = (typeof TIER_NAMES)[number];
 
+// LEANER SHAPE: a node is structure, not prose. `role` is a SHORT label (≤ ~4
+// words, e.g. "thumbnail worker") — NOT a sentence explaining what the service
+// does — and `security` are short control TAGS (e.g. "TLS", "DLQ", "idempotent
+// consumer"). The old prose `purpose` and the `scaling` object are gone: burst
+// handling now lives in the tier `delta` and in `security` tags, so the model
+// emits differences and structure instead of repeating explanations.
 export const NodeSchema = z
   .object({
     id: z.string().describe("Stable node id, referenced by edges."),
     awsService: z.string().describe("AWS service name, e.g. 'API Gateway'."),
-    purpose: z.string().describe("What this node does in the design."),
+    role: z.string().describe("SHORT role label (≤ ~4 words), e.g. 'thumbnail worker' — not prose."),
     security: z
       .array(z.string())
-      .describe("Security controls applied to this node (TLS, WAF, least-priv role, ...)."),
-    scaling: z
-      .object({
-        burst: z.string().describe("How this node absorbs burst load."),
-        trivialInCore: z
-          .boolean()
-          .describe("True if burst handling is built into the core (trivial add), false if it is an option."),
-      })
-      .strict(),
+      .describe("Short security-control TAGS (e.g. 'TLS', 'private subnet', 'DLQ', 'idempotent consumer')."),
   })
   .strict();
 
@@ -52,18 +50,23 @@ export const CostDriverSchema = z
   })
   .strict();
 
+// LEANER SHAPE: a tier is STRUCTURE + DIFFERENCES, not exposition. `delta` says
+// what THIS tier adds/changes vs the others on the robustness axis (single-AZ →
+// multi-AZ, on-demand → provisioned, +read replicas, +DLQ, burst handling); for
+// the budget tier it states the baseline. The removed `setupSteps`,
+// `burstHandling`, and `securityNotes` were near-redundant prose tiers — the
+// security floor is now stated ONCE at the top level (`securityFloor`), and
+// resilience/burst reasoning is carried by node `security` tags + `delta`.
 export const TierSchema = z
   .object({
     name: z.enum(TIER_NAMES),
     summary: z.string(),
     nodes: z.array(NodeSchema),
     edges: z.array(EdgeSchema),
-    setupSteps: z.array(z.string()).describe("Ordered, plain-language setup instructions (R5)."),
-    costDrivers: z.array(CostDriverSchema),
-    burstHandling: z
+    delta: z
       .array(z.string())
-      .describe("Burst notes — 'built-in: ...' when trivial, 'optional: ...' otherwise (R8)."),
-    securityNotes: z.array(z.string()).describe("Non-empty: the safe-by-default posture applied to this tier (R7)."),
+      .describe("What THIS tier adds/changes vs the others (robustness incl. burst handling). Budget states the baseline."),
+    costDrivers: z.array(CostDriverSchema),
     tradeoffs: z.array(z.string()).describe("Trade-offs versus the other two tiers (R3)."),
   })
   .strict();
@@ -89,6 +92,12 @@ export const ArchitectureResultSchema = z
   .object({
     assumptions: z.array(z.string()),
     clarificationsUsed: z.array(z.string()),
+    // LEANER SHAPE: the safe-by-default floor (the 8 baselines) stated ONCE here,
+    // applying to ALL tiers — instead of repeating the whole security posture in
+    // every tier's prose. Short lines, one per baseline.
+    securityFloor: z
+      .array(z.string())
+      .describe("The safe-by-default floor (the 8 security baselines) stated once; applies to every tier."),
     tiers: z.array(TierSchema).length(3).describe("Exactly three tiers: budget, balanced, resilient."),
     recommendedTier: z
       .enum(TIER_NAMES)

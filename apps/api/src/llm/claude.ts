@@ -267,7 +267,7 @@ export class ClaudeProvider implements LlmProvider {
 
 /**
  * Serialize just the fields the model needs to write the config: the tier name +
- * summary, each node's service/purpose/security controls, and the labeled edges
+ * summary, each node's service/role/security controls, and the labeled edges
  * (so any queue's DLQ and the data flow are reflected). Kept compact and stable.
  */
 function buildConfigInput(tier: Tier): string {
@@ -276,7 +276,7 @@ function buildConfigInput(tier: Tier): string {
     summary: tier.summary,
     nodes: tier.nodes.map((n) => ({
       awsService: n.awsService,
-      purpose: n.purpose,
+      role: n.role,
       security: n.security,
     })),
     edges: tier.edges.map((e) => ({
