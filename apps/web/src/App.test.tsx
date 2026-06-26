@@ -12,6 +12,7 @@ vi.mock("mermaid", () => ({
 }));
 
 import { App } from "./App.js";
+import { addHistory } from "./lib/history.js";
 
 function tier(name: TierName, summary: string): Tier {
   return {
@@ -82,6 +83,8 @@ beforeEach(() => {
   renderMock.mockClear();
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
+  // Isolate the localStorage-backed design history between tests.
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -259,6 +262,32 @@ describe("App (U10 + E6 intake)", () => {
     expect(screen.getByText("balanced delta detail")).toBeInTheDocument();
     // The diagram re-rendered for the newly-selected tier.
     await waitFor(() => expect(renderMock.mock.calls.length).toBeGreaterThan(callsAfterBudget));
+  });
+
+  it("re-opens a saved design from history instantly, with no network call ($0)", async () => {
+    addHistory("A saved photo API", fullResult);
+
+    render(<App />);
+
+    // Recents are listed on the landing; opening one renders the stored design.
+    // Anchor to the open button (the remove button's label also names the prompt).
+    fireEvent.click(screen.getByRole("button", { name: /^A saved photo API/i }));
+
+    expect(await screen.findByText("Budget single-AZ design")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("saves a generated design to history for later free retrieval", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(fullResult));
+
+    render(<App />);
+    typeAndSubmit("A photo-sharing API");
+    skipIntake();
+
+    await screen.findByText("Budget single-AZ design");
+    // The just-generated design is now in localStorage history.
+    const { loadHistory } = await import("./lib/history.js");
+    expect(loadHistory().map((e) => e.prompt)).toContain("A photo-sharing API");
   });
 
   it("surfaces a friendly message for a rate-limit error", async () => {

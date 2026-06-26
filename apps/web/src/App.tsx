@@ -14,9 +14,17 @@ import { ClarifyForm } from "./components/ClarifyForm.js";
 import { IntakeForm } from "./components/IntakeForm.js";
 import { KeyDecisions } from "./components/KeyDecisions.js";
 import { LoadingDraft } from "./components/LoadingDraft.js";
+import { RecentDesigns } from "./components/RecentDesigns.js";
 import { SecurityPanel } from "./components/SecurityPanel.js";
 import { TierTabs } from "./components/TierTabs.js";
 import type { GenerateResponse, TierName } from "./lib/types.js";
+import {
+  loadHistory,
+  addHistory,
+  removeHistory,
+  clearHistory,
+  type HistoryEntry,
+} from "./lib/history.js";
 
 type Phase = "idle" | "intake" | "loading" | "clarify" | "result" | "error";
 
@@ -66,31 +74,45 @@ export function App(): JSX.Element {
   const [lastAttempt, setLastAttempt] = useState<{ answers?: string[]; round: number }>({
     round: 1,
   });
+  // Past designs saved in this browser — re-openable instantly for $0.
+  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory());
 
   const submitted = phase !== "idle";
 
-  const applyOutcome = (outcome: ApiOutcome): void => {
+  const applyOutcome = (outcome: ApiOutcome, promptForHistory?: string): void => {
     switch (outcome.kind) {
       case "clarify":
         setClarifyState({ questions: outcome.questions, round: outcome.round });
         setPhase("clarify");
         return;
-      case "result":
-        setResult({
+      case "result": {
+        const response: GenerateResponse = {
           tiers: outcome.tiers,
           assumptions: outcome.assumptions,
           securityFloor: outcome.securityFloor,
           recommendedTier: outcome.recommendedTier,
           recommendationRationale: outcome.recommendationRationale,
           keyDecisions: outcome.keyDecisions,
-        });
+        };
+        setResult(response);
         setPhase("result");
+        if (promptForHistory) setHistory(addHistory(promptForHistory, response));
         return;
+      }
       case "error":
         setErrorMessage(friendlyError(outcome));
         setPhase("error");
         return;
     }
+  };
+
+  // Re-open a saved design: pure client-side, no fetch, $0.
+  const openSaved = (entry: HistoryEntry): void => {
+    setGoal(entry.prompt);
+    setResult(entry.result);
+    setClarifyState(null);
+    setErrorMessage("");
+    setPhase("result");
   };
 
   const startGeneration = async (
@@ -104,7 +126,7 @@ export function App(): JSX.Element {
     setClarifyState(null);
     setErrorMessage("");
     setLastAttempt({ answers, round });
-    applyOutcome(await generate({ description, answers, round }));
+    applyOutcome(await generate({ description, answers, round }), description);
   };
 
   const handleSubmit = (e: React.FormEvent): void => {
@@ -124,7 +146,7 @@ export function App(): JSX.Element {
   const handleAnswers = async (answers: string[]): Promise<void> => {
     const round = clarifyState?.round ?? 1;
     setPhase("loading");
-    applyOutcome(await generate({ description: goal, answers, round }));
+    applyOutcome(await generate({ description: goal, answers, round }), goal);
   };
 
   return (
@@ -152,6 +174,15 @@ export function App(): JSX.Element {
             Design it
           </button>
         </form>
+      )}
+
+      {!submitted && (
+        <RecentDesigns
+          entries={history}
+          onOpen={openSaved}
+          onRemove={(id) => setHistory(removeHistory(id))}
+          onClear={() => setHistory(clearHistory())}
+        />
       )}
 
       {phase === "intake" && <IntakeForm onComplete={handleIntake} />}
