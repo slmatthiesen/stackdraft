@@ -2,9 +2,11 @@
 
 **Describe a system in plain English — get a safe, costed AWS architecture across budget / balanced / resilient tiers.**
 
-[![CI](https://github.com/stevenmatthiesen/stackdraft/actions/workflows/ci.yml/badge.svg)](https://github.com/stevenmatthiesen/stackdraft/actions/workflows/ci.yml)
+[![CI](https://github.com/slmatthiesen/stackdraft/actions/workflows/ci.yml/badge.svg)](https://github.com/slmatthiesen/stackdraft/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-22-339933.svg)](https://nodejs.org)
+
+**Live at [stackdraft.dev](https://stackdraft.dev).**
 
 You type what you want to build; Stackdraft returns a recommended AWS architecture as a labeled data-flow diagram, ordered setup steps, and cost estimates in each service's **native cost unit** — presented across three robustness tiers with the trade-offs spelled out. Security and a safe-by-default posture are baked into every recommendation, not bolted on.
 
@@ -37,7 +39,7 @@ flowchart TB
     PIPE[Generation pipeline]
     GUARD[Abuse + cost guards]
     subgraph LLM["LlmProvider (V1: Claude)"]
-      CLAUDE[ClaudeProvider<br/>claude-sonnet-4-6 (default)<br/>structured output]
+      CLAUDE["ClaudeProvider<br/>claude-sonnet-4-6 (default)<br/>structured output"]
     end
     subgraph STORE["Storage interfaces — SQLite (Redis-swappable)"]
       MEM[(MemoryStore<br/>+ seeded KB)]
@@ -120,7 +122,7 @@ sequenceDiagram
 Requires **Node 22** and **pnpm 10.5.0**.
 
 ```bash
-git clone https://github.com/stevenmatthiesen/stackdraft.git
+git clone https://github.com/slmatthiesen/stackdraft.git
 cd stackdraft
 pnpm install
 cp .env.example .env          # then set ANTHROPIC_API_KEY in .env
@@ -142,7 +144,7 @@ pnpm typecheck   # pnpm -r typecheck
 
 ## Deploy
 
-Stackdraft builds to a **single Docker container** (the API serves the SPA build; SQLite lives on a mounted volume). The hosted demo runs on DigitalOcean behind Cloudflare for edge rate-limiting and optional Turnstile. Run the monthly pricing refresh as a separate scheduled task so a large offer-file pull can't starve the request-serving process.
+Stackdraft builds to a **single Docker container** (the API serves the SPA build; SQLite lives on a mounted volume). The hosted demo at [stackdraft.dev](https://stackdraft.dev) runs on DigitalOcean behind Cloudflare for edge rate-limiting and optional Turnstile. Run the monthly pricing refresh as a separate scheduled task so a large offer-file pull can't starve the request-serving process.
 
 See [docs/deploy.md](./docs/deploy.md) for the full DigitalOcean + Cloudflare walkthrough.
 

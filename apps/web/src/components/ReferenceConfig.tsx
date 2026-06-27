@@ -39,9 +39,16 @@ function friendlyConfigError(outcome: Extract<ConfigOutcome, { kind: "error" }>)
   return CONFIG_ERRORS[outcome.code] ?? "Couldn't generate the reference config. Please try again.";
 }
 
+const TIER_LABEL: Record<string, string> = {
+  budget: "Budget",
+  balanced: "Balanced",
+  resilient: "Resilient",
+};
+
 export function ReferenceConfig({ tier }: { tier: Tier }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<State>({ status: "idle" });
+  const tierLabel = TIER_LABEL[tier.name] ?? tier.name;
 
   const load = async (): Promise<void> => {
     setState({ status: "loading" });
@@ -62,13 +69,22 @@ export function ReferenceConfig({ tier }: { tier: Tier }): JSX.Element {
 
   return (
     <section className="card refconfig" aria-label="Reference configuration">
+      <h2 className="refconfig__title">Get the Terraform</h2>
+      <p className="refconfig__lead">
+        A reference infrastructure-as-code starter for the <strong>{tierLabel}</strong> tier —
+        it changes with the tier you select above. Review and harden before applying.
+      </p>
+      <p className="refconfig__meta">
+        Written live by the model the first time you open it (a few seconds), then
+        cached — reopening the same tier is instant and free.
+      </p>
       <button
         type="button"
         className="refconfig__toggle"
         aria-expanded={open}
         onClick={toggle}
       >
-        {open ? "Hide reference setup" : "Show reference setup (Terraform)"}
+        {open ? "Hide reference setup" : `Show ${tierLabel} Terraform`}
       </button>
 
       {open && (
@@ -90,8 +106,17 @@ export function ReferenceConfig({ tier }: { tier: Tier }): JSX.Element {
 
           {state.status === "ready" && (
             <div className="refconfig__result">
-              <div className="banner banner--warn" role="note">
-                <span>⚠ Reference only — review and harden before applying.</span>
+              <div className="banner banner--warn refconfig__warn" role="note">
+                <div className="refconfig__warn-text">
+                  <strong>⚠ Reference only — do not apply blindly.</strong>
+                  <span>
+                    Running this provisions <strong>real, billable AWS resources</strong> in
+                    your account. Estimates are not guarantees. Review it, run{" "}
+                    <code>terraform plan</code>, set a billing budget, and{" "}
+                    <code>terraform destroy</code> what you don't need. You are responsible for
+                    all costs.
+                  </span>
+                </div>
                 <CopyButton text={state.code} label="Copy" />
               </div>
               <pre className="refconfig__code" aria-label="Reference Terraform">

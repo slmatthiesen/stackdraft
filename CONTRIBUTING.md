@@ -10,7 +10,7 @@ Thanks for your interest. This is an open-source showcase project, and contribut
 ## Setup
 
 ```bash
-git clone https://github.com/stevenmatthiesen/stackdraft.git
+git clone https://github.com/slmatthiesen/stackdraft.git
 cd stackdraft
 pnpm install
 cp .env.example .env          # set ANTHROPIC_API_KEY; other defaults are safe

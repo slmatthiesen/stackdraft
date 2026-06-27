@@ -7,13 +7,13 @@ export function SecurityPanel({ floor }: { floor: string[] }): JSX.Element | nul
   if (floor.length === 0) return null;
 
   return (
-    // Expanded by default (it's the safe-by-default posture worth seeing), but
-    // collapsible to get it out of the way.
-    <details className="card security" open>
-      <summary className="security__summary" aria-label="Security floor">
+    // Always open — the safe-by-default posture is worth seeing on every design,
+    // so it's a plain section rather than a collapsible panel.
+    <section className="card security" aria-label="Security floor">
+      <h2 className="security__summary">
         Security floor (applied to every tier)
         <span className="security__count"> · {floor.length} controls</span>
-      </summary>
+      </h2>
       <ul>
         {floor.map((item, i) => (
           <li key={i}>
@@ -21,6 +21,6 @@ export function SecurityPanel({ floor }: { floor: string[] }): JSX.Element | nul
           </li>
         ))}
       </ul>
-    </details>
+    </section>
   );
 }

@@ -1,7 +1,11 @@
 /**
  * "Recent designs" — past generations saved in the browser (see lib/history).
  * Re-opening one renders the stored design instantly with no server call ($0).
+ *
+ * Removal is destructive (no server copy to restore from), so both the per-item ✕
+ * and "Clear all" ask for an inline confirmation before deleting.
  */
+import { useState } from "react";
 import type { HistoryEntry } from "../lib/history.js";
 
 const TIER_LABEL: Record<string, string> = {
@@ -34,15 +38,50 @@ export function RecentDesigns({
   onRemove: (id: string) => void;
   onClear: () => void;
 }): JSX.Element | null {
+  // Which item's ✕ is awaiting confirmation (null = none), and the Clear-all confirm.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState<boolean>(false);
+
   if (entries.length === 0) return null;
 
   return (
     <section className="recents" aria-label="Recent designs">
       <div className="recents__head">
         <h2>Recent designs</h2>
-        <button type="button" className="recents__clear" onClick={onClear}>
-          Clear all
-        </button>
+        {confirmingClear ? (
+          <span className="recents__confirm" role="group" aria-label="Confirm clearing all recent designs">
+            <span className="recents__confirm-q">Clear all?</span>
+            <button
+              type="button"
+              className="recents__confirm-yes"
+              onClick={() => {
+                onClear();
+                setConfirmingClear(false);
+                setConfirmingId(null);
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="recents__confirm-no"
+              onClick={() => setConfirmingClear(false)}
+            >
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="recents__clear"
+            onClick={() => {
+              setConfirmingClear(true);
+              setConfirmingId(null);
+            }}
+          >
+            Clear all
+          </button>
+        )}
       </div>
       <ul className="recents__list">
         {entries.map((e) => (
@@ -59,14 +98,43 @@ export function RecentDesigns({
                 {" · free"}
               </span>
             </button>
-            <button
-              type="button"
-              className="recents__remove"
-              aria-label={`Remove "${e.prompt}" from recent designs`}
-              onClick={() => onRemove(e.id)}
-            >
-              ✕
-            </button>
+            {confirmingId === e.id ? (
+              <span
+                className="recents__confirm"
+                role="group"
+                aria-label={`Confirm removing "${e.prompt}"`}
+              >
+                <button
+                  type="button"
+                  className="recents__confirm-yes"
+                  onClick={() => {
+                    onRemove(e.id);
+                    setConfirmingId(null);
+                  }}
+                >
+                  Remove
+                </button>
+                <button
+                  type="button"
+                  className="recents__confirm-no"
+                  onClick={() => setConfirmingId(null)}
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="recents__remove"
+                aria-label={`Remove "${e.prompt}" from recent designs`}
+                onClick={() => {
+                  setConfirmingId(e.id);
+                  setConfirmingClear(false);
+                }}
+              >
+                ✕
+              </button>
+            )}
           </li>
         ))}
       </ul>

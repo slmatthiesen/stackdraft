@@ -54,7 +54,7 @@ describe("ReferenceConfig", () => {
     // No fetch until opened.
     expect(fetchMock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: /show reference setup/i }));
+    fireEvent.click(screen.getByRole("button", { name: /show .*terraform/i }));
 
     // Red "reference only" warning banner + the code.
     expect(await screen.findByRole("note")).toHaveTextContent(/reference only/i);
@@ -63,7 +63,7 @@ describe("ReferenceConfig", () => {
 
     // Close then re-open — served from cache, no second fetch.
     fireEvent.click(screen.getByRole("button", { name: /hide reference setup/i }));
-    fireEvent.click(screen.getByRole("button", { name: /show reference setup/i }));
+    fireEvent.click(screen.getByRole("button", { name: /show .*terraform/i }));
     expect(screen.getByText(/aws_s3_bucket/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -72,7 +72,7 @@ describe("ReferenceConfig", () => {
     fetchMock.mockResolvedValue(jsonResponse({ format: "terraform", code: TF }));
     render(<ReferenceConfig tier={tier} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /show reference setup/i }));
+    fireEvent.click(screen.getByRole("button", { name: /show .*terraform/i }));
     await screen.findByText(/aws_s3_bucket/);
 
     fireEvent.click(screen.getByRole("button", { name: /^copy$/i }));
@@ -84,7 +84,7 @@ describe("ReferenceConfig", () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: "daily_budget_reached" }, 503));
     render(<ReferenceConfig tier={tier} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /show reference setup/i }));
+    fireEvent.click(screen.getByRole("button", { name: /show .*terraform/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/budget/i);
   });
 });

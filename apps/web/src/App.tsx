@@ -15,7 +15,9 @@ import { IntakeForm } from "./components/IntakeForm.js";
 import { KeyDecisions } from "./components/KeyDecisions.js";
 import { LoadingDraft } from "./components/LoadingDraft.js";
 import { RecentDesigns } from "./components/RecentDesigns.js";
+import { ReferenceConfig } from "./components/ReferenceConfig.js";
 import { SecurityPanel } from "./components/SecurityPanel.js";
+import { SiteFooter } from "./components/SiteFooter.js";
 import { TierTabs } from "./components/TierTabs.js";
 import type { GenerateResponse, TierName } from "./lib/types.js";
 import {
@@ -76,6 +78,12 @@ export function App(): JSX.Element {
   });
   // Past designs saved in this browser — re-openable instantly for $0.
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory());
+  // The echoed goal can be a long paragraph; clamp it to two lines by default
+  // and let the user expand it so it doesn't dominate the top of the page.
+  const [goalExpanded, setGoalExpanded] = useState<boolean>(false);
+  // Active tier — lifted here (not inside TierTabs) so the page-bottom Terraform,
+  // which is tier-specific, tracks the selected tab. Reset on each new result.
+  const [selectedTier, setSelectedTier] = useState<TierName>("balanced");
 
   const submitted = phase !== "idle";
 
@@ -95,6 +103,7 @@ export function App(): JSX.Element {
           keyDecisions: outcome.keyDecisions,
         };
         setResult(response);
+        setSelectedTier(response.recommendedTier);
         setPhase("result");
         if (promptForHistory) setHistory(addHistory(promptForHistory, response));
         return;
@@ -110,6 +119,7 @@ export function App(): JSX.Element {
   const openSaved = (entry: HistoryEntry): void => {
     setGoal(entry.prompt);
     setResult(entry.result);
+    setSelectedTier(entry.result.recommendedTier);
     setClarifyState(null);
     setErrorMessage("");
     setPhase("result");
@@ -154,7 +164,23 @@ export function App(): JSX.Element {
       <header className="app__header">
         <span className="app__brand">Stackdraft</span>
         {submitted ? (
-          <h1 className="app__goal">{goal}</h1>
+          <h1 className="app__goal">
+            <button
+              type="button"
+              className="app__goal-toggle"
+              aria-expanded={goalExpanded}
+              title={goalExpanded ? "Collapse" : "Show full description"}
+              onClick={() => setGoalExpanded((v) => !v)}
+            >
+              <span className="app__goal-label" aria-hidden="true">
+                Your description
+              </span>
+              <span className="app__goal-text">{goal}</span>
+              <span className="app__goal-caret" aria-hidden="true">
+                {goalExpanded ? "▲" : "▼"}
+              </span>
+            </button>
+          </h1>
         ) : (
           <p className="app__tagline">Describe a system — get a safe, costed AWS design.</p>
         )}
@@ -174,6 +200,37 @@ export function App(): JSX.Element {
             Design it
           </button>
         </form>
+      )}
+
+      {!submitted && (
+        <section className="preview" aria-label="What you'll get">
+          <h2 className="preview__title">You'll get a full report</h2>
+          <ul className="preview__list">
+            <li className="preview__item">
+              <span className="preview__icon" aria-hidden="true">◇</span>
+              <div>
+                <strong>An architecture diagram</strong> — a clear visual of how the
+                services connect, rendered from a Mermaid graph you can export.
+              </div>
+            </li>
+            <li className="preview__item">
+              <span className="preview__icon" aria-hidden="true">≣</span>
+              <div>
+                <strong>Three costed tiers with the reasoning</strong> — budget, balanced,
+                and resilient designs, each with a cost estimate, a security baseline, and
+                the key decisions behind the recommended choice.
+              </div>
+            </li>
+            <li className="preview__item">
+              <span className="preview__icon" aria-hidden="true">{"</>"}</span>
+              <div>
+                <strong>Reference Terraform</strong> — infrastructure-as-code you can pull
+                into your project and review with your coding agent before going live, or
+                compare against your current AWS setup.
+              </div>
+            </li>
+          </ul>
+        </section>
       )}
 
       {!submitted && (
@@ -224,6 +281,8 @@ export function App(): JSX.Element {
             tiers={result.tiers}
             assumptions={result.assumptions}
             recommendedTier={result.recommendedTier}
+            selected={selectedTier}
+            onSelect={setSelectedTier}
           />
 
           <KeyDecisions decisions={result.keyDecisions} />
@@ -240,8 +299,16 @@ export function App(): JSX.Element {
               </ul>
             </section>
           )}
+
+          {/* Terraform last: read the design, security floor, and assumptions
+              first, then grab the tier-specific reference file. */}
+          <ReferenceConfig
+            tier={result.tiers.find((t) => t.name === selectedTier) ?? result.tiers[0]!}
+          />
         </>
       )}
+
+      <SiteFooter />
     </main>
   );
 }

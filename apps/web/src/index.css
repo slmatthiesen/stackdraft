@@ -82,9 +82,12 @@ body {
   line-height: 1;
 }
 
-/* The wordmark shrinks once a design is on screen, ceding focus to the result. */
+/* Once a design is on screen the wordmark stays prominent in size but greys back
+   to a brand mark, so it's clearly distinct from the (solid, boxed) goal below. */
 .app--submitted .app__brand {
-  font-size: 1.35rem;
+  font-size: 1.7rem;
+  color: var(--muted);
+  opacity: 0.8;
 }
 
 .app__tagline {
@@ -95,11 +98,68 @@ body {
 
 .app__goal {
   color: var(--ink);
-  font-size: 1.6rem;
+  font-size: 1.25rem;
   margin: 0.25rem 0 0;
   font-weight: 700;
   /* slide-in as the prompt becomes the page goal */
   animation: goal-rise 0.4s ease both;
+}
+
+/* The goal echoes the (possibly long) prompt the user typed. Wrap it in a labeled,
+   bordered box with a caret so it's clearly an expandable control — clamped to two
+   lines by default so it doesn't dominate the top of the page. */
+.app__goal-toggle {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 0.15rem 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.45);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.app__goal-toggle:hover,
+.app__goal-toggle:focus-visible {
+  border-color: var(--brand-dark);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.app__goal-label {
+  grid-column: 1 / -1;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.app__goal-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.app__goal-toggle[aria-expanded="true"] .app__goal-text {
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+}
+
+.app__goal-caret {
+  align-self: end;
+  font-size: 0.6em;
+  color: var(--muted);
+  padding-bottom: 0.15em;
 }
 
 @keyframes goal-rise {
@@ -249,10 +309,21 @@ body {
 
 /* Calmer list rhythm in the result cards (clean, scannable). */
 .security li,
-.delta li,
-.tradeoffs li,
+.tier-compare li,
 .assumptions li {
   margin: 0.35rem 0;
+}
+
+/* The combined "what changes + trade-offs" card: separate the second heading from
+   the first list so the two sections read as distinct within one box. */
+.tier-compare ul {
+  margin: 0.35rem 0 0;
+}
+
+.tier-compare__second {
+  margin-top: 1.35rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--card-border);
 }
 
 .clarify__hint,
@@ -275,22 +346,42 @@ body {
 
 /* ---- tiers ---- */
 
-.tiers__tablist {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+.tiers__hint {
   margin: 1.5rem 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
+.tiers__tablist {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.75rem;
+}
+
+/* Clearly tappable: thicker border, a button-like shadow, and a hover lift so
+   it's obvious these switch the design (not just labels). */
 .tiers__tab {
   background: var(--card);
-  border: 1px solid var(--card-border);
+  border: 2px solid var(--brand-dark);
   border-radius: var(--radius);
-  padding: 0.5rem 1rem;
+  padding: 0.55rem 1.15rem;
   color: var(--ink);
   display: flex;
   flex-direction: column;
   line-height: 1.2;
+  box-shadow: var(--card-shadow);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.tiers__tab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(74, 60, 31, 0.16);
+}
+
+.tiers__tab:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .tiers__tab--active {
@@ -467,6 +558,21 @@ body {
 
 /* ---- reference config ---- */
 
+.refconfig__title {
+  margin-top: 0;
+}
+
+.refconfig__lead {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+}
+
+.refconfig__meta {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .refconfig__toggle {
   font: inherit;
   cursor: pointer;
@@ -531,6 +637,55 @@ body {
   color: #ffd479;
 }
 
+/* ---- landing "what you'll get" preview ---- */
+
+.preview {
+  max-width: 640px;
+  margin: 2.5rem auto 0;
+}
+
+.preview__title {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 0.9rem;
+  text-align: center;
+}
+
+.preview__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.preview__item {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  box-shadow: var(--card-shadow);
+  font-size: 0.95rem;
+}
+
+.preview__icon {
+  flex: 0 0 auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(70, 96, 31, 0.1);
+  color: var(--brand-dark);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
 /* ---- recent designs (localStorage history) ---- */
 
 .recents {
@@ -575,6 +730,9 @@ body {
   display: flex;
   align-items: stretch;
   gap: 0.4rem;
+  /* Never let a long prompt push the row past the textbox width. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .recents__open {
@@ -586,11 +744,11 @@ body {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
-  padding: 0.6rem 0.85rem;
+  padding: 0.45rem 0.7rem;
   color: var(--ink);
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.1rem;
   box-shadow: var(--card-shadow);
 }
 
@@ -626,14 +784,51 @@ body {
   border-color: #d98c8c;
 }
 
-/* ---- security floor (collapsible) ---- */
+/* Inline confirm for destructive actions (per-item ✕ and Clear all). */
+.recents__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.recents__confirm-q {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.recents__confirm-yes,
+.recents__confirm-no {
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: var(--radius);
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--card-border);
+  background: transparent;
+}
+
+.recents__confirm-yes {
+  border-color: #d98c8c;
+  color: #5a1414; /* dark red on near-white → AA */
+  font-weight: 600;
+}
+
+.recents__confirm-yes:hover {
+  background: #fff4f4;
+}
+
+.recents__confirm-no {
+  color: var(--muted);
+}
+
+/* ---- security floor (always open) ---- */
 
 .security__summary {
-  cursor: pointer;
   font-family: var(--serif);
   font-size: 1.25rem;
   font-weight: 600;
   color: var(--ink);
+  margin: 0 0 0.5rem;
 }
 
 .security__count {
@@ -641,10 +836,6 @@ body {
   font-size: 0.85rem;
   font-weight: 400;
   color: var(--muted);
-}
-
-.security[open] .security__summary {
-  margin-bottom: 0.5rem;
 }
 
 /* ---- glossary tooltips ---- */
@@ -755,7 +946,11 @@ body {
   border-radius: var(--radius);
   padding: 1rem;
   margin: 1rem 0;
-  overflow-x: auto;
+  /* Cap the box height and scroll inside it: a tall top-to-bottom flow doesn't
+     dominate the page, but the diagram still renders at a readable full width
+     (not shrunk to fit) and the Expand control opens the full, larger view. */
+  max-height: 560px;
+  overflow: auto;
 }
 
 /* Fill the card width instead of Mermaid's small intrinsic size. */
@@ -945,4 +1140,164 @@ body {
   .drafting__phase {
     animation: none;
   }
+}
+
+/* ---- stronger terraform cost/liability warning ---- */
+
+.refconfig__warn {
+  align-items: flex-start;
+}
+
+.refconfig__warn-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.refconfig__warn-text strong {
+  font-size: 1rem;
+}
+
+.refconfig__warn code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  background: rgba(90, 20, 20, 0.08);
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+}
+
+/* ---- site footer ---- */
+
+.site-footer {
+  max-width: 880px;
+  margin: 4rem auto 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--card-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.25rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.site-footer__mark {
+  font-family: var(--serif);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.site-footer__link {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--brand-dark);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.site-footer__link:hover,
+.site-footer__link:focus-visible {
+  color: var(--ink);
+}
+
+.site-footer__fine {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+}
+
+/* ---- info overlay (about / terms) ---- */
+
+.info-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(34, 29, 24, 0.7);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 1rem;
+  overflow-y: auto;
+  animation: modal-fade 0.18s ease both;
+}
+
+.info-modal__panel {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 2rem 2.25rem;
+  max-width: 640px;
+  width: 100%;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+}
+
+.info-modal__close {
+  position: fixed;
+  top: 1rem;
+  right: 1.25rem;
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--card);
+  color: var(--ink);
+}
+
+.info-doc h2 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 1.5rem;
+  margin: 0 0 0.75rem;
+  color: var(--ink);
+}
+
+.info-doc h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin: 1.4rem 0 0.4rem;
+  color: var(--ink);
+}
+
+.info-doc p {
+  margin: 0 0 0.85rem;
+}
+
+.info-doc a {
+  color: var(--brand-dark);
+}
+
+.info-doc code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  background: rgba(74, 60, 31, 0.08);
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+}
+
+.info-doc__meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: -0.4rem;
+}
+
+.info-doc__note {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--card-border);
 }
