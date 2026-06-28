@@ -27,13 +27,11 @@ const TAB_SUBLABELS: Partial<Record<TierName, string>> = {
 export function TierTabs({
   tiers,
   assumptions,
-  recommendedTier,
   selected,
   onSelect,
 }: {
   tiers: Tier[];
   assumptions: string[];
-  recommendedTier?: TierName;
   /** Active tier — owned by the parent so the page-bottom Terraform tracks it. */
   selected: TierName;
   onSelect: (name: TierName) => void;
@@ -55,12 +53,8 @@ export function TierTabs({
             onClick={() => onSelect(t.name)}
           >
             <span className="tiers__tab-name">{TAB_LABELS[t.name]}</span>
-            {t.name === recommendedTier ? (
-              <span className="tiers__tab-badge">Recommended</span>
-            ) : (
-              TAB_SUBLABELS[t.name] && (
-                <span className="tiers__tab-sub">{TAB_SUBLABELS[t.name]}</span>
-              )
+            {TAB_SUBLABELS[t.name] && (
+              <span className="tiers__tab-sub">{TAB_SUBLABELS[t.name]}</span>
             )}
           </button>
         ))}
@@ -75,7 +69,7 @@ export function TierTabs({
             )}
           </h2>
           <p className="tier__summary">{tier.summary}</p>
-          <CostSummary drivers={tier.costDrivers} />
+          <CostSummary drivers={tier.costDrivers} tierName={tier.name} />
           {tier.name === "budget" && (
             <p className="tier__safe-note">
               Lowest cost that still keeps the full security floor — never a security-relaxed option.

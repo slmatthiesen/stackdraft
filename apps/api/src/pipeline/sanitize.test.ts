@@ -10,8 +10,6 @@ function arch(...nodes: ArchitectureNode[]): GeneratedArchitecture {
     assumptions: [],
     clarificationsUsed: [],
     tiers: [{ name: "budget", summary: "s", nodes, edges: [], delta: [], tradeoffs: [] }],
-    recommendedTier: "budget",
-    recommendationRationale: "r",
     keyDecisions: [],
   };
 }

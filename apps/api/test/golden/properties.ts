@@ -190,21 +190,18 @@ export const noBannedServices: Property = (result) => {
   };
 };
 
-// --- Opinionated recommendation (the design COMMITS to a tier) --------------
+// --- Default-selected tier --------------------------------------------------
 
-/** The output must recommend a real tier for this workload and justify it. */
+/** The model no longer picks a tier; the backend injects a deterministic default
+ *  (the medium tier the UI pre-selects). It must still be a valid tier name. */
 export const recommendsATier: Property = (result) => {
-  const validTier = (TIER_NAMES as readonly string[]).includes(result.recommendedTier);
-  const justified = result.recommendationRationale.trim().length > 0;
-  const ok = validTier && justified;
+  const ok = (TIER_NAMES as readonly string[]).includes(result.recommendedTier);
   return {
     name: "recommendsATier",
     ok,
     reason: ok
-      ? `recommends '${result.recommendedTier}' with a rationale`
-      : !validTier
-        ? `recommendedTier '${result.recommendedTier}' is not one of [${TIER_NAMES.join(",")}]`
-        : "recommendationRationale is empty",
+      ? `default-selected tier is '${result.recommendedTier}'`
+      : `recommendedTier '${result.recommendedTier}' is not one of [${TIER_NAMES.join(",")}]`,
   };
 };
 

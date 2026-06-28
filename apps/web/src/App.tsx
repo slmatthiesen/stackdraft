@@ -51,11 +51,6 @@ interface ClarifyState {
 // this is the final input — generate now, no model clarify round-trip (E6).
 const INTAKE_ROUND = 2;
 
-const TIER_DISPLAY: Record<TierName, string> = {
-  budget: "Budget",
-  balanced: "Balanced",
-  resilient: "Resilient",
-};
 
 const ERROR_MESSAGES: Record<string, string> = {
   rate_limited: "You're going a little fast — wait a moment and try again.",
@@ -407,24 +402,14 @@ export function App(): JSX.Element {
           >
             ← Back to all examples
           </button>
-          <section
-            className="banner banner--recommend"
-            role="note"
-            aria-label="Recommendation"
-          >
-            <p className="recommend__lead">
-              Recommended:{" "}
-              <strong>{TIER_DISPLAY[result.recommendedTier]}</strong>
-            </p>
-            {result.recommendationRationale && (
-              <p className="recommend__why">{result.recommendationRationale}</p>
-            )}
-            {feedbackFresh && (
+          {feedbackFresh && (
+            <section className="banner banner--recommend">
               <div
                 className="recommend__feedback"
                 role="group"
                 aria-label="Rate this design"
               >
+                <span className="recommend__feedback-label">Useful design?</span>
                 <button
                   type="button"
                   className={`recommend__thumb recommend__thumb--up${feedbackRating === 1 ? " recommend__thumb--on" : ""}`}
@@ -446,15 +431,14 @@ export function App(): JSX.Element {
                   👎
                 </button>
               </div>
-            )}
-          </section>
+            </section>
+          )}
 
-          {/* Diagram leads: the tier section (diagram first) sits right under the
-              recommendation so the design is visible immediately. */}
+          {/* Diagram leads: the tier tabs (Budget/Balanced/Resilient, Balanced
+              pre-selected) sit at the top so the design is visible immediately. */}
           <TierTabs
             tiers={result.tiers}
             assumptions={result.assumptions}
-            recommendedTier={result.recommendedTier}
             selected={selectedTier}
             onSelect={setSelectedTier}
           />

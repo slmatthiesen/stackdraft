@@ -12,9 +12,9 @@ import {
   estimateCosts,
   formatRange,
   onDemandDisclaimer,
-  parseTrafficVolume,
   ASSUMED_MONTHLY_VOLUME,
   TIER_COST_MULTIPLIER,
+  TIER_VOLUME_SCALE,
 } from "./cost.js";
 
 const REGION = "us-east-1";
@@ -144,8 +144,9 @@ describe("estimateCosts", () => {
   });
 
   it("scales cost by tier (resilient > balanced > budget)", () => {
-    // Same service (ALB) in all three tiers — the only difference is the tier
-    // robustness multiplier, so the range must grow budget→balanced→resilient.
+    // Same service (ALB) in all three tiers — the difference is each tier's volume
+    // stage (TIER_VOLUME_SCALE) × its robustness multiplier (TIER_COST_MULTIPLIER),
+    // so the range must grow budget→balanced→resilient.
     const sameNodes = [node("ALB")];
     const differentiated: ArchitectureResult = {
       assumptions: [],
@@ -166,9 +167,16 @@ describe("estimateCosts", () => {
       t.costDrivers.find((d) => d.service === "ALB" && d.unit === "$/hr")!.estimateRange;
 
     const [budget, balanced, resilient] = out.tiers as [Tier, Tier, Tier];
-    expect(albRange(budget)).toBe(formatRange(albPrice.usd * band.low, albPrice.usd * band.high));
-    expect(albRange(balanced)).toBe(formatRange(albPrice.usd * band.low * 2, albPrice.usd * band.high * 2));
-    expect(albRange(resilient)).toBe(formatRange(albPrice.usd * band.low * 3, albPrice.usd * band.high * 3));
+    // ALB is always-on CAPACITY: its $/hr band is NOT scaled by the request-volume
+    // ladder (TIER_VOLUME_SCALE) — only by the per-tier robustness multiplier, so the
+    // three tiers differ by topology (1×/2×/3×), not by 0.1×/1×/10× request volume.
+    const expected = (t: Tier["name"]): string => {
+      const mult = TIER_COST_MULTIPLIER[t];
+      return formatRange(albPrice.usd * band.low * mult, albPrice.usd * band.high * mult);
+    };
+    expect(albRange(budget)).toBe(expected("budget"));
+    expect(albRange(balanced)).toBe(expected("balanced"));
+    expect(albRange(resilient)).toBe(expected("resilient"));
     // ALB is not a VPC-bound datastore and no node tags "private subnet" → no NAT line.
     expect(budget.costDrivers.some((d) => d.service === "NAT Gateway")).toBe(false);
   });
@@ -307,32 +315,33 @@ describe("estimateCosts", () => {
     expect(drivers.some((d) => d.service === "API Gateway WebSocket" && d.unit === "per 1k requests")).toBe(true);
   });
 
-  it("parseTrafficVolume maps the intake traffic answer to a volume multiplier", () => {
-    expect(parseTrafficVolume(["Expected traffic: Just launching"])).toBe(0.1);
-    expect(parseTrafficVolume(["Expected traffic: Hundreds–thousands a day"])).toBe(1);
-    expect(parseTrafficVolume(["Expected traffic: Millions a day"])).toBe(30);
-    expect(parseTrafficVolume(["Expected traffic: Not sure"])).toBe(1);
-    expect(parseTrafficVolume(undefined)).toBe(1);
-    // A non-traffic answer (or none) leaves the band unscaled.
-    expect(parseTrafficVolume(["Downtime tolerance: Mission-critical"])).toBe(1);
-  });
-
-  it("estimateCosts scales the band by volume (Millions ≈ 30× the baseline)", () => {
-    const base: ArchitectureResult = {
+  it("costs each tier at its own volume stage (budget 0.1× → balanced 1× → resilient 30×)", () => {
+    // Volume is intrinsic to the tier ladder, not an intake knob: the SAME service in
+    // each tier is priced at that tier's stage × its robustness multiplier.
+    const sameNodes = [node("API Gateway")];
+    const ladder: ArchitectureResult = {
       assumptions: [],
       clarificationsUsed: [],
       securityFloor: SECURITY_FLOOR,
       ...RECOMMENDATION,
-      tiers: [tier("budget", [node("API Gateway")], ["baseline"])],
+      tiers: [
+        tier("budget", sameNodes, ["baseline"]),
+        tier("balanced", sameNodes, ["+ multi-AZ"]),
+        tier("resilient", sameNodes, ["+ cross-region"]),
+      ],
     };
     const price = stores.pricing.get("API Gateway", REGION).find((r) => r.unit === "per-1k-requests")!;
     const band = ASSUMED_MONTHLY_VOLUME["per-1k-requests"]!;
-    const atScale = (s: number): string =>
-      estimateCosts(base, stores.pricing, REGION, s).tiers[0]!.costDrivers.find(
-        (d) => d.service === "API Gateway" && d.unit === "per 1k requests",
-      )!.estimateRange;
-    expect(atScale(1)).toBe(formatRange(price.usd * band.low, price.usd * band.high));
-    expect(atScale(30)).toBe(formatRange(price.usd * band.low * 30, price.usd * band.high * 30));
+    const out = estimateCosts(ladder, stores.pricing, REGION);
+    const reqRange = (t: Tier): string =>
+      t.costDrivers.find((d) => d.service === "API Gateway" && d.unit === "per 1k requests")!.estimateRange;
+    for (const t of out.tiers as Tier[]) {
+      const vol = TIER_VOLUME_SCALE[t.name];
+      const mult = TIER_COST_MULTIPLIER[t.name];
+      expect(reqRange(t)).toBe(
+        formatRange(price.usd * (band.low * vol) * mult, price.usd * (band.high * vol) * mult),
+      );
+    }
   });
 
   it("falls back to the seed and flags approximate when the cache lacks a service", () => {

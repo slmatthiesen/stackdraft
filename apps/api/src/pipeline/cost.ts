@@ -53,6 +53,24 @@ export const TIER_COST_MULTIPLIER: Record<TierName, number> = {
   resilient: 3,
 };
 
+/**
+ * Per-tier VOLUME stage — the scale each tier is costed AT, orthogonal to the
+ * robustness premium above. The three tiers are a growth ladder, not three
+ * robustness variants of one fixed load: each is a 10× step in request volume,
+ * centered (band geometric mean) on roughly 1k / 10k / 100k requests PER DAY for
+ * budget / balanced / resilient. This deliberately targets the 80/20 of real
+ * workloads — most apps live in the 1k–100k/day range — rather than a millions/day
+ * outlier. The user picks a tier and is shown that scale's bill, deterministically,
+ * with no intake volume knob in the loop. Applied to the assumed monthly-volume
+ * bands, then the robustness multiplier layers on top (resilient ≈ 10× volume ×
+ * 3× robustness).
+ */
+export const TIER_VOLUME_SCALE: Record<TierName, number> = {
+  budget: 0.1, // ~1k requests/day
+  balanced: 1, // ~10k requests/day (the showcased default)
+  resilient: 10, // ~100k requests/day
+};
+
 /** Assumed MONTHLY consumption per native unit for REQUEST / CAPACITY / STORAGE
  *  units — the count of native units consumed per month (low → high). Exported so
  *  tests/callers compute expected ranges from the same source of truth.
@@ -96,7 +114,7 @@ const DEFAULT_BAND: VolumeBand = { low: 1, high: 10 };
 
 /**
  * Baseline monthly REQUEST volume (the same 100k–1M/mo the request-priced bands
- * encode), scaled by the intake traffic answer. The driver for payload-
+ * encode), scaled by the tier's volume stage ({@link TIER_VOLUME_SCALE}). The driver for payload-
  * proportional traffic units so transfer/logs grow with request count ONCE,
  * instead of via a fixed band × the request multiplier (the old double-count).
  */
@@ -126,6 +144,22 @@ export const TRAFFIC_BYTES_PER_REQUEST: Record<string, number> = {
  * multiplier is already baked into the request count, so it is NOT re-applied
  * (that re-scaling was the cost bug). The tier multiplier is applied by the caller.
  */
+/**
+ * Always-on CAPACITY units — priced per hour of UPTIME, not per request. A NAT
+ * gateway, ALB, or always-on Fargate task costs the same whether the tier serves
+ * 1k or 100k requests/day, so the request-volume ladder (TIER_VOLUME_SCALE) MUST
+ * NOT scale them: doing so made budget show a $3/mo NAT gateway (really ~$33) and
+ * resilient a $2,956 one (really ~$100). They move only with topology — captured
+ * by the per-tier robustness multiplier the caller applies on top of this band.
+ */
+const CAPACITY_UNITS: ReadonlySet<string> = new Set([
+  "hour",
+  "lcu-hour",
+  "vcpu-hour",
+  "gb-hour",
+  "web-acl-month",
+]);
+
 function monthlyBand(unit: string, volumeScale: number): VolumeBand {
   const bytes = TRAFFIC_BYTES_PER_REQUEST[unit];
   if (bytes !== undefined) {
@@ -133,6 +167,9 @@ function monthlyBand(unit: string, volumeScale: number): VolumeBand {
     return { low: gb(REQUESTS_PER_MONTH_BASE.low), high: gb(REQUESTS_PER_MONTH_BASE.high) };
   }
   const base = ASSUMED_MONTHLY_VOLUME[unit] ?? DEFAULT_BAND;
+  // Capacity is traffic-independent — return the fixed uptime band unscaled; the
+  // caller's tier multiplier carries the topology (single-AZ → multi-AZ → multi-region).
+  if (CAPACITY_UNITS.has(unit)) return base;
   return { low: base.low * volumeScale, high: base.high * volumeScale };
 }
 
@@ -186,28 +223,6 @@ export function onDemandDisclaimer(region: string): string {
     `over assumed monthly volumes. They exclude the AWS Free Tier, Savings Plans, ` +
     `Reserved Instances, and negotiated discounts.`
   );
-}
-
-/**
- * Map the intake "Expected traffic" answer to a multiplier on the assumed monthly
- * volume bands. The default band (~100k–1M req/mo) already represents the middle
- * option ("Hundreds–thousands a day"); "Just launching" shrinks it and "Millions a
- * day" grows it ~30×, so the estimate reflects the STATED traffic instead of a flat
- * generic band. Returns 1 (no scaling) when there is no traffic answer.
- *
- * WHY scale the band rather than recompute: real volume is unknown — the intake is a
- * coarse chip — so we keep the deterministic per-unit model and stretch its band.
- * Always-on units (EC2/ALB/RDS hours) scale too, which slightly overstates them at
- * "millions" (you add some capacity), an acceptable approximation for a range.
- */
-export function parseTrafficVolume(answers: string[] | undefined): number {
-  const a = (answers ?? []).find((x) => /^expected traffic:/i.test(x));
-  if (!a) return 1;
-  const v = a.slice(a.indexOf(":") + 1).toLowerCase();
-  if (v.includes("not sure")) return 1;
-  if (v.includes("just launching")) return 0.1;
-  if (v.includes("million")) return 30;
-  return 1; // "Hundreds–thousands a day" (and anything unrecognized) is the baseline band.
 }
 
 /** Offline seed fallback, keyed by `service|region`, used only when the cache
@@ -375,7 +390,7 @@ function egressesFromPrivateSubnet(tier: GeneratedTier): boolean {
   });
 }
 
-function estimateTier(tier: GeneratedTier, pricing: PricingStore, region: string, volumeScale: number): Tier {
+function estimateTier(tier: GeneratedTier, pricing: PricingStore, region: string): Tier {
   const drivers: CostDriver[] = [];
   const seen = new Set<string>();
   const add = (d: CostDriver): void => {
@@ -386,6 +401,8 @@ function estimateTier(tier: GeneratedTier, pricing: PricingStore, region: string
   };
 
   const tierMultiplier = TIER_COST_MULTIPLIER[tier.name];
+  // The scale this tier is costed at — budget launch-scale → resilient millions.
+  const volumeScale = TIER_VOLUME_SCALE[tier.name];
 
   const services = uniqueOrdered(tier.nodes.flatMap((n) => splitServices(n.awsService).map(normalizeService)));
   for (const service of services) {
@@ -425,9 +442,8 @@ export function estimateCosts(
   result: ArchitectureBeforeCost,
   pricing: PricingStore,
   region: string,
-  volumeScale: number = 1,
 ): ArchitectureResult {
-  const tiers = result.tiers.map((tier) => estimateTier(tier, pricing, region, volumeScale));
+  const tiers = result.tiers.map((tier) => estimateTier(tier, pricing, region));
   const disclaimer = onDemandDisclaimer(region);
   const assumptions = result.assumptions.includes(disclaimer)
     ? result.assumptions

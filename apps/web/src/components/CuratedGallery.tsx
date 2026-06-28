@@ -12,6 +12,9 @@ import type { CuratedSummary } from "../lib/types.js";
 
 const VOTE_KEY = "drafture.curated.votes.v1";
 
+/** The curated run that designs THIS site's own deployment — featured above the list. */
+const SELF_HOST_ID = "self-hosting-a-stateful-web-app";
+
 type VoteValue = 1 | -1;
 
 function loadLocalVotes(): Record<string, VoteValue> {
@@ -80,6 +83,26 @@ export function CuratedGallery({
     <section id="gallery" className="gallery" aria-label="Curated example designs">
       <h2 className="gallery__title">See how it works with these</h2>
       <p className="gallery__sub">Real designs we've generated — open one instantly, free.</p>
+      {entries.some((e) => e.id === SELF_HOST_ID) && (
+        <button
+          type="button"
+          className="gallery__featured"
+          onClick={() => void open(SELF_HOST_ID)}
+          disabled={openingId === SELF_HOST_ID}
+          aria-busy={openingId === SELF_HOST_ID}
+        >
+          {openingId === SELF_HOST_ID ? (
+            <>
+              <span className="gallery__spinner" aria-hidden="true" /> Loading…
+            </>
+          ) : (
+            <>
+              <strong>This site is built on its own StackDraft plan.</strong>
+              <span className="gallery__featured-sub">See how it was designed →</span>
+            </>
+          )}
+        </button>
+      )}
       <ul className="gallery__list">
         {entries.map((e) => {
           const c = counts[e.id] ?? { up: e.upvotes, down: e.downvotes };

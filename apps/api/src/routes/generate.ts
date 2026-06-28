@@ -25,7 +25,7 @@ import { llmCostUsd, provisionalLlmCostUsdFromConfig, reserveSpend } from "../gu
 import { runClarify, roundCapReached } from "../pipeline/clarify.js";
 import { assembleGrounding } from "../pipeline/ground.js";
 import { generateArchitecture } from "../pipeline/generate.js";
-import { estimateCosts, parseTrafficVolume } from "../pipeline/cost.js";
+import { estimateCosts } from "../pipeline/cost.js";
 import { researchMissingTopics } from "../research/bestPractice.js";
 
 import { hashPrompt } from "../store/responseCache.js";
@@ -220,14 +220,9 @@ async function handleGenerate(
     addUsage(generated.usage);
 
     // (U7) Fill cost drivers deterministically from the PricingStore — never the model.
-    // Scale the volume band by the intake "Expected traffic" answer so the estimate
-    // reflects the stated traffic (e.g. "Millions a day" ≈ 30× the baseline band).
-    const estimated = estimateCosts(
-      generated.result,
-      ctx.stores.pricing,
-      ctx.config.DEFAULT_REGION,
-      parseTrafficVolume(body.answers),
-    );
+    // Each tier is costed at its own volume stage (~1k → ~10k → ~100k requests/day),
+    // so the scale lives in the tier ladder, not an intake knob.
+    const estimated = estimateCosts(generated.result, ctx.stores.pricing, ctx.config.DEFAULT_REGION);
 
     // Reconcile the provisional reserve to the ACTUAL request cost (KTD7).
     const actualUsd = llmCostUsd(usage, ctx.pricing);

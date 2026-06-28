@@ -131,7 +131,7 @@ describe("App (U10 + E6 intake)", () => {
     expect(screen.getByRole("heading", { name: "A photo-sharing API" })).toBeInTheDocument();
     expect(screen.queryByLabelText("System description")).not.toBeInTheDocument();
     // Intake (E6) is shown once before generation — no fetch yet.
-    expect(screen.getByText(/answer 3 quick questions/i)).toBeInTheDocument();
+    expect(screen.getByText(/answer 2 quick questions/i)).toBeInTheDocument();
     expect(generateCalls()).toHaveLength(0);
   });
 
@@ -159,36 +159,35 @@ describe("App (U10 + E6 intake)", () => {
     render(<App />);
     typeAndSubmit("A photo-sharing API");
 
-    fireEvent.click(screen.getByRole("radio", { name: "Millions a day" }));
     fireEvent.click(screen.getByRole("radio", { name: "Mission-critical" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Regulated (HIPAA/PCI/etc.)" }));
     fireEvent.click(screen.getByRole("button", { name: /^design it$/i }));
 
     await screen.findByText("Budget single-AZ design");
     const body = JSON.parse((generateCalls()[0]![1] as RequestInit).body as string);
     expect(body.answers).toEqual([
-      "Expected traffic: Millions a day",
       "Downtime tolerance: Mission-critical",
+      "Data sensitivity: Regulated (HIPAA/PCI/etc.)",
     ]);
     expect(body.round).toBe(2);
   });
 
-  it("leads with a recommendation banner and preselects the recommended tier", async () => {
+  it("preselects the Balanced tier (no model recommendation) and shows the feedback control", async () => {
     queueResponses(jsonResponse(balancedRecommended));
 
     render(<App />);
     typeAndSubmit("A REST API");
     skipIntake();
 
-    // Recommendation is the headline.
-    const banner = await screen.findByLabelText("Recommendation");
-    expect(banner).toHaveTextContent(/Recommended:\s*Balanced/i);
-    expect(banner).toHaveTextContent(/safest default/i);
-
-    // Balanced (not the first tier) is auto-selected and badged.
-    const balancedTab = screen.getByRole("tab", { name: /balanced/i });
+    // Balanced (the middle tier) is auto-selected — no "Recommended" badge anymore.
+    const balancedTab = await screen.findByRole("tab", { name: /balanced/i });
     expect(balancedTab).toHaveAttribute("aria-selected", "true");
-    expect(balancedTab).toHaveTextContent(/recommended/i);
+    expect(balancedTab).not.toHaveTextContent(/recommended/i);
     expect(screen.getByText("Balanced multi-AZ design")).toBeInTheDocument();
+
+    // The feedback control replaces the old recommendation headline.
+    expect(screen.getByRole("group", { name: "Rate this design" })).toBeInTheDocument();
+    expect(screen.queryByText(/Recommended:/i)).not.toBeInTheDocument();
   });
 
   it("renders the key-decisions (ADR) card", async () => {

@@ -286,7 +286,7 @@ body {
   color: #5a1414; /* dark red on near-white → 9.1:1 ✅ AA */
 }
 
-/* Recommendation — the headline. Brand-tinted white card, dark ink (AAA). */
+/* Feedback strip — brand-tinted white card, dark ink (AAA). */
 .banner--recommend {
   display: block;
   background: var(--card);
@@ -295,25 +295,15 @@ body {
   color: var(--ink);
 }
 
-.recommend__lead {
-  margin: 0;
-  font-size: 1.2rem;
-}
-
-.recommend__lead strong {
-  color: var(--brand-dark);
-  text-transform: capitalize;
-}
-
-.recommend__why {
-  margin: 0.4rem 0 0;
-  color: var(--muted);
-}
-
 .recommend__feedback {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
-  margin-top: 0.75rem;
+}
+
+.recommend__feedback-label {
+  margin-right: 0.25rem;
+  color: var(--muted);
 }
 
 .recommend__thumb {
@@ -537,6 +527,13 @@ body {
 
 .cost-summary__band {
   font-weight: 700;
+}
+
+/* The assumed traffic behind the band — muted, sits between band and baseline. */
+.cost-summary__traffic {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .cost-summary__label {
@@ -836,6 +833,34 @@ body {
   text-align: center;
 }
 
+/* "This site is built on its own StackDraft plan" — featured dogfooding callout. */
+.gallery__featured {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  width: 100%;
+  margin: 0 0 0.6rem;
+  padding: 0.7rem 1rem;
+  border: 1.5px dashed var(--card-border);
+  border-radius: var(--radius);
+  background: rgba(70, 96, 31, 0.05);
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.gallery__featured:hover,
+.gallery__featured:focus-visible {
+  background: rgba(70, 96, 31, 0.1);
+  border-color: rgba(70, 96, 31, 0.5);
+}
+.gallery__featured-sub {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .gallery__list {
   list-style: none;
   margin: 0;
@@ -1119,8 +1144,17 @@ body {
   cursor: help;
 }
 
+/* Reusable tooltip host (the bubble reads data-tip) — not just glossary terms. */
+.tip-host {
+  position: relative;
+  cursor: help;
+  text-decoration: underline dotted var(--brand-dark);
+  text-underline-offset: 0.18em;
+}
+
 /* Instant CSS tooltip (the native title attr is slow/unreliable). */
-.gloss::after {
+.gloss::after,
+.tip-host::after {
   content: attr(data-tip);
   position: absolute;
   left: 0;
@@ -1146,7 +1180,10 @@ body {
 
 .gloss:hover::after,
 .gloss:focus::after,
-.gloss:focus-visible::after {
+.gloss:focus-visible::after,
+.tip-host:hover::after,
+.tip-host:focus::after,
+.tip-host:focus-visible::after {
   opacity: 1;
   transform: translateY(0);
 }

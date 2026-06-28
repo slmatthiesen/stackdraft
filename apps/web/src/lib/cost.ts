@@ -8,7 +8,7 @@
  * drivers. This is an order-of-magnitude estimate, never a quote.
  */
 
-import type { CostDriver } from "./types.js";
+import type { CostDriver, TierName } from "./types.js";
 
 export interface CostRollup {
   low: number;
@@ -89,4 +89,56 @@ export function formatMoney(n: number): string {
 export function formatCostBand(rollup: CostRollup): string | null {
   if (rollup.counted === 0) return null;
   return `~$${formatMoney(rollup.low)}–$${formatMoney(rollup.high)}/mo`;
+}
+
+/**
+ * Assumed request volume each tier is costed at — MIRRORS the API's
+ * `TIER_VOLUME_SCALE` (apps/api/src/pipeline/cost.ts), anchored at 10k/day for
+ * balanced (×0.1 / ×1 / ×10). The cost bands are computed from the same scale
+ * server-side, so these MUST move together — otherwise the "assumes ~X/day" label
+ * misstates the volume behind the dollars.
+ */
+export const TIER_REQUESTS_PER_DAY: Record<TierName, number> = {
+  budget: 1_000,
+  balanced: 10_000,
+  resilient: 100_000,
+};
+
+const DAYS_PER_MONTH = 30;
+
+/** The tier's assumed request volume, per day and per (30-day) month. */
+export function assumedTraffic(tier: TierName): { perDay: number; perMonth: number } {
+  const perDay = TIER_REQUESTS_PER_DAY[tier];
+  return { perDay, perMonth: perDay * DAYS_PER_MONTH };
+}
+
+/** Compact request count: 1_000 → "1K", 300_000 → "300K", 3_000_000 → "3M". */
+export function formatRequests(n: number): string {
+  if (n >= 1_000_000) return `${trimZeros(n / 1_000_000)}M`;
+  if (n >= 1_000) return `${trimZeros(n / 1_000)}K`;
+  return String(n);
+}
+
+function trimZeros(n: number): string {
+  return n.toFixed(1).replace(/\.0$/, "");
+}
+
+/**
+ * Roughly the cost added per extra 10K requests/month AT THIS TIER — the slope of
+ * the variable (traffic-driven) cost. Sums the spread (high − low) of the VARIABLE
+ * drivers only (fixed always-on/storage drivers don't grow with requests), then
+ * divides by the tier's monthly request-band width (= 90 × requests/day, i.e. the
+ * 100k–1M base band scaled by this tier) and rescales to 10K. 0 when there's no
+ * traffic-driven cost (a tier whose whole bill is always-on capacity).
+ */
+export function marginalPer10kRequests(drivers: CostDriver[], tier: TierName): number {
+  let variableSpread = 0;
+  for (const d of drivers) {
+    if (isFixedUnit(d.unit)) continue;
+    const parsed = parseMonthlyRange(d.estimateRange);
+    if (parsed) variableSpread += parsed.high - parsed.low;
+  }
+  const monthlyBandWidth = 90 * TIER_REQUESTS_PER_DAY[tier];
+  if (monthlyBandWidth <= 0) return 0;
+  return (variableSpread * 10_000) / monthlyBandWidth;
 }

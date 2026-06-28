@@ -17,13 +17,10 @@ interface Question {
   options: string[];
 }
 
+// Scale is no longer asked here — it's the Low/Medium/High tier ladder on the
+// result (Medium pre-selected). These two questions shape the DESIGN itself
+// (availability target + compliance), which the tiers don't express.
 const QUESTIONS: Question[] = [
-  {
-    id: "traffic",
-    label: "Expected traffic",
-    prompt: "Expected traffic right now?",
-    options: ["Just launching", "Hundreds–thousands a day", "Millions a day", "Not sure"],
-  },
   {
     id: "downtime",
     label: "Downtime tolerance",
@@ -59,7 +56,7 @@ export function IntakeForm({
 
   return (
     <section className="card intake" aria-label="Quick intake">
-      <h2>To tailor the design, answer 3 quick questions — or skip for sensible, scalable defaults.</h2>
+      <h2>To tailor the design, answer 2 quick questions — or skip for sensible, scalable defaults.</h2>
       <div className="intake__questions">
         {QUESTIONS.map((q) => (
           <fieldset key={q.id} className="intake__question">

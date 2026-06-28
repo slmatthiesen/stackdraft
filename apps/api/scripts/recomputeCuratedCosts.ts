@@ -4,8 +4,9 @@
  * The design graph (model output) is untouched; only costDrivers + the disclaimer
  * are rewritten. Votes are preserved (only the body column is updated).
  *
- * The stored body carries no raw intake answer, so the per-design traffic-volume
- * multiplier is keyed by id here, mirroring seedCurated's DEMOS answers.
+ * Volume is now intrinsic to each tier ({@link TIER_VOLUME_SCALE}), so there is no
+ * per-design traffic multiplier to thread through — estimateCosts costs each tier at
+ * its own stage (~1k → ~10k → ~100k requests/day).
  *
  * Run (set DB_PATH to the gallery DB if not running from the repo root):
  *   pnpm --filter @drafture/api exec tsx scripts/recomputeCuratedCosts.ts
@@ -14,14 +15,6 @@ import { getConfig } from "../src/config.js";
 import { buildAppContext } from "../src/app/context.js";
 import { estimateCosts } from "../src/pipeline/cost.js";
 import type { ArchitectureResult } from "../src/schema/architecture.js";
-
-// parseTrafficVolume multiplier per design, matching seedCurated's intake answers.
-const VOLUME_SCALE: Record<string, number> = {
-  "photo-sharing-app": 1, // Hundreds–thousands a day
-  "url-shortener": 30, // Millions a day
-  "realtime-chat-backend": 1, // Hundreds–thousands a day
-  "e-commerce-checkout-api": 1, // Hundreds–thousands a day
-};
 
 function main(): void {
   const config = getConfig();
@@ -32,8 +25,7 @@ function main(): void {
     const run = ctx.stores.curated.get(summary.id);
     if (!run) continue;
     const design = JSON.parse(run.body) as ArchitectureResult;
-    const volume = VOLUME_SCALE[summary.id] ?? 1;
-    const reestimated = estimateCosts(design, ctx.stores.pricing, region, volume);
+    const reestimated = estimateCosts(design, ctx.stores.pricing, region);
     // upsert preserves votes + created_at (ON CONFLICT updates only body/title/prompt).
     ctx.stores.curated.upsert({
       id: summary.id,

@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { CostSummary } from "./CostSummary.js";
-import { parseMonthlyRange, rollupCost } from "../lib/cost.js";
+import {
+  parseMonthlyRange,
+  rollupCost,
+  assumedTraffic,
+  formatRequests,
+  marginalPer10kRequests,
+} from "../lib/cost.js";
 import type { CostDriver } from "../lib/types.js";
 
 function driver(estimateRange: string): CostDriver {
@@ -29,6 +35,29 @@ describe("cost rollup (lib/cost)", () => {
     const rollup = rollupCost([driver("$12–$30/mo"), driver("$0.023/GB-mo")]);
     expect(rollup.counted).toBe(1);
     expect(rollup.partial).toBe(true);
+  });
+
+  it("maps each tier to its assumed request volume (per day + per 30-day month)", () => {
+    expect(assumedTraffic("budget")).toEqual({ perDay: 1_000, perMonth: 30_000 });
+    expect(assumedTraffic("balanced")).toEqual({ perDay: 10_000, perMonth: 300_000 });
+    expect(assumedTraffic("resilient")).toEqual({ perDay: 100_000, perMonth: 3_000_000 });
+  });
+
+  it("formats request counts compactly", () => {
+    expect(formatRequests(1_000)).toBe("1K");
+    expect(formatRequests(30_000)).toBe("30K");
+    expect(formatRequests(300_000)).toBe("300K");
+    expect(formatRequests(3_000_000)).toBe("3M");
+  });
+
+  it("marginalPer10kRequests is the variable cost slope over the tier's request band", () => {
+    // $0.70–$7.00/mo request-priced driver at balanced: spread $6.30 over the 900k/mo
+    // band (90 × 10k/day) ⇒ $6.30 × 10_000 / 900_000 = $0.07 per 10K requests.
+    const variable = [driver("$0.70–$7.00/mo")];
+    expect(marginalPer10kRequests(variable, "balanced")).toBeCloseTo(0.07, 4);
+    // Always-on capacity ($/hr) is excluded — it doesn't grow with request volume.
+    const fixed: CostDriver[] = [{ service: "ALB", unit: "$/hr", estimateRange: "$32–$65/mo", note: "" }];
+    expect(marginalPer10kRequests(fixed, "balanced")).toBe(0);
   });
 });
 
@@ -79,5 +108,23 @@ describe("CostSummary", () => {
     );
     expect(screen.getByText(/zero traffic/i)).toBeInTheDocument();
     expect(screen.queryByText(/baseline/i)).toBeNull();
+  });
+
+  it("shows the tier's assumed traffic and a per-10K marginal tip when given a tierName", () => {
+    render(
+      <CostSummary
+        tierName="balanced"
+        drivers={[{ service: "API Gateway", unit: "per 1k requests", estimateRange: "$0.70–$7.00/mo", note: "" }]}
+      />,
+    );
+    expect(screen.getByText(/Assumes ~10K requests\/day \(~300K\/month\)/i)).toBeInTheDocument();
+    const band = screen.getByText("~$0.7–$7/mo");
+    expect(band.getAttribute("data-tip")).toMatch(/per additional 10K requests/i);
+  });
+
+  it("omits the assumed-traffic line and tooltip when no tierName is given", () => {
+    render(<CostSummary drivers={[{ service: "s", unit: "per 1k requests", estimateRange: "$5–$50/mo", note: "" }]} />);
+    expect(screen.queryByText(/Assumes ~/i)).toBeNull();
+    expect(screen.getByText("~$5–$50/mo").getAttribute("data-tip")).toBeNull();
   });
 });

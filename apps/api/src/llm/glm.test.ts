@@ -81,8 +81,6 @@ function validArchitecture(): GeneratedArchitecture {
     assumptions: ["single region"],
     clarificationsUsed: [],
     tiers: [makeTier("budget"), makeTier("balanced"), makeTier("resilient")],
-    recommendedTier: "balanced",
-    recommendationRationale: "Balanced fits moderate, bursty traffic with multi-AZ availability.",
     keyDecisions: [
       {
         decision: "Compute model",

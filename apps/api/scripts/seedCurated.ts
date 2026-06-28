@@ -19,7 +19,7 @@
 import { getConfig } from "../src/config.js";
 import { buildAppContext } from "../src/app/context.js";
 import { generateArchitecture } from "../src/pipeline/generate.js";
-import { estimateCosts, parseTrafficVolume } from "../src/pipeline/cost.js";
+import { estimateCosts } from "../src/pipeline/cost.js";
 
 interface Demo {
   title: string;
@@ -35,7 +35,6 @@ const DEMOS: Demo[] = [
       "A photo-sharing app: users upload images, each processed asynchronously " +
       "(thumbnails, content moderation), and others see a feed. Uploads are bursty.",
     answers: [
-      "Expected traffic: Hundreds–thousands a day",
       "Downtime tolerance: Important",
       "Data sensitivity: No",
     ],
@@ -46,7 +45,6 @@ const DEMOS: Demo[] = [
       "A URL shortener: a public API to create short links and a high-volume redirect " +
       "endpoint that looks up the target and 302s. Reads vastly outnumber writes.",
     answers: [
-      "Expected traffic: Millions a day",
       "Downtime tolerance: Mission-critical",
       "Data sensitivity: No",
     ],
@@ -57,7 +55,6 @@ const DEMOS: Demo[] = [
       "A realtime chat backend: persistent websocket connections, message fan-out to " +
       "rooms, message history persisted, and presence tracking.",
     answers: [
-      "Expected traffic: Hundreds–thousands a day",
       "Downtime tolerance: Mission-critical",
       "Data sensitivity: No",
     ],
@@ -68,7 +65,6 @@ const DEMOS: Demo[] = [
       "An e-commerce checkout API: cart, order placement, payment via a third-party " +
       "processor, inventory decrement, and order-confirmation emails. Spiky at sale times.",
     answers: [
-      "Expected traffic: Hundreds–thousands a day",
       "Downtime tolerance: Mission-critical",
       "Data sensitivity: Regulated (HIPAA/PCI/etc.)",
     ],
@@ -83,8 +79,32 @@ const DEMOS: Demo[] = [
       "(retries with backoff, a dead-letter path, per-message delivery status), and inbound " +
       "volume is bursty.",
     answers: [
-      "Expected traffic: Hundreds–thousands a day",
       "Downtime tolerance: Mission-critical",
+      "Data sensitivity: No",
+    ],
+  },
+  {
+    title: "Self-hosting a stateful web app",
+    description:
+      "A public web tool (this site itself): a single Node.js process in one Docker " +
+      "container runs a Fastify HTTP API that serves both a built static React SPA and " +
+      "`/api/*` JSON endpoints on one port (8080). The API is stateful — for each request " +
+      "it calls the Anthropic LLM over outbound HTTPS and writes to a database. The entire " +
+      "datastore is ONE SQLite file (better-sqlite3, single-writer, on disk) holding a " +
+      "memory cache, a response cache, a pricing cache, and a spend ledger; it must be " +
+      "durable and backed up, and it cannot be served by multiple writers at once. LLM " +
+      "calls are the dominant cost; the app self-limits them with per-IP rate limiting, a " +
+      "per-IP daily cap, token caps, a 24h identical-response cache, and a hard global " +
+      "daily-spend ceiling — so absolute compute need is small. It sits behind Cloudflare " +
+      "(edge TLS, edge rate-limiting, optional Turnstile) and trusts CF-Connecting-IP; " +
+      "there is no inbound database path. Traffic is low (a personal portfolio/showcase) " +
+      "and bursty when shared. A monthly offline batch job streams large public pricing " +
+      "files (hundreds of MB) to refresh a cache table, and must run off the request path. " +
+      "The same footprint should also host several other small static web pages cheaply. " +
+      "Optimize for low cost and simple ops while keeping the DB durable and the design " +
+      "able to scale one step up without a rewrite.",
+    answers: [
+      "Downtime tolerance: Important",
       "Data sensitivity: No",
     ],
   },
@@ -122,12 +142,7 @@ async function main(): Promise<void> {
         answers: demo.answers,
         opts: { maxTokens: config.LLM_MAX_TOKENS, effort: config.LLM_EFFORT },
       });
-      const estimated = estimateCosts(
-        generated.result,
-        ctx.stores.pricing,
-        config.DEFAULT_REGION,
-        parseTrafficVolume(demo.answers),
-      );
+      const estimated = estimateCosts(generated.result, ctx.stores.pricing, config.DEFAULT_REGION);
       ctx.stores.curated.upsert({
         id,
         title: demo.title,

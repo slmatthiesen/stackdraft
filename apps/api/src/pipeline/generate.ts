@@ -47,9 +47,20 @@ export async function generateArchitecture(input: GenerateInput): Promise<Genera
   // Deterministically fix the model's most common tag error (a "private subnet"
   // tag on a managed/serverless service) before injecting the security floor.
   const cleaned = sanitizeGenerated(generated);
+
   // Inject the deterministic security floor from the KB — the model never emits it.
   // costDrivers are filled later by estimateCosts, so this is ArchitectureBeforeCost.
-  const result: ArchitectureBeforeCost = { ...cleaned, securityFloor: securityFloorLines() };
+  //
+  // The model no longer picks a recommended tier: the three tiers are a scale ladder
+  // (low→high), so we always pre-select BALANCED — the medium-business default — and
+  // let the user click up/down. recommendationRationale is intentionally empty (no
+  // recommendation prose); the field is kept only for response-shape stability.
+  const result: ArchitectureBeforeCost = {
+    ...cleaned,
+    securityFloor: securityFloorLines(),
+    recommendedTier: "balanced",
+    recommendationRationale: "",
+  };
 
   return {
     result,

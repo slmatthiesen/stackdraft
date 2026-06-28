@@ -116,12 +116,6 @@ const generatedShape = {
   assumptions: z.array(z.string()),
   clarificationsUsed: z.array(z.string()),
   tiers: z.array(GeneratedTierSchema).length(3).describe("Exactly three tiers: budget, balanced, resilient."),
-  recommendedTier: z
-    .enum(TIER_NAMES)
-    .describe("The single tier to actually ship for THIS workload — the opinionated recommendation."),
-  recommendationRationale: z
-    .string()
-    .describe("1–2 sentences justifying why that tier fits this specific problem (traffic, availability, compliance)."),
   keyDecisions: z
     .array(KeyDecisionSchema)
     .describe("The handful of load-bearing decisions: chosen vs alternatives + why, framed through the WAF pillars."),
@@ -145,6 +139,13 @@ export const ArchitectureResultSchema = z
     securityFloor: z
       .array(z.string())
       .describe("The safe-by-default floor (the 8 security baselines) stated once; applies to every tier."),
+    // Injected deterministically (NOT model-chosen): the tier the UI pre-selects.
+    // Always "balanced" (the medium-business default the tiers ladder around) — the
+    // model no longer picks a tier, so there's no recommendation prose either.
+    recommendedTier: z.enum(TIER_NAMES).describe("Deterministic default-selected tier (always balanced)."),
+    recommendationRationale: z
+      .string()
+      .describe("Retained for response-shape stability; empty now that the recommendation is just the default tier."),
   })
   .strict();
 
@@ -159,7 +160,11 @@ export type ArchitectureResult = z.infer<typeof ArchitectureResultSchema>;
 /** The generated graph + injected security floor, BEFORE the deterministic cost
  *  drivers are computed. `generateArchitecture` returns this; `estimateCosts`
  *  fills `costDrivers` on each tier to produce a full {@link ArchitectureResult}. */
-export type ArchitectureBeforeCost = GeneratedArchitecture & { securityFloor: string[] };
+export type ArchitectureBeforeCost = GeneratedArchitecture & {
+  securityFloor: string[];
+  recommendedTier: TierName;
+  recommendationRationale: string;
+};
 
 /** Clarification gate result (R2). */
 export const ClarificationSchema = z
