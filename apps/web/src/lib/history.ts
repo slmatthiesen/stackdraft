@@ -19,9 +19,33 @@ export interface HistoryEntry {
 }
 
 const KEY = "drafture.history.v1";
+// Pre-rename key (Stackdraft -> Drafture). Kept only to migrate existing data.
+const LEGACY_KEY = "stackdraft.history.v1";
 const MAX = 20;
 
+/**
+ * One-time move of pre-rename history. When the product was renamed Stackdraft ->
+ * Drafture the storage key changed, which orphaned designs already saved in a user's
+ * browser. If the current key is empty and the legacy key has valid data, copy it over
+ * and drop the legacy key so this runs once. Best-effort, like every other access.
+ */
+function migrateLegacyKey(): void {
+  try {
+    if (localStorage.getItem(KEY) !== null) return;
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (!legacy) return;
+    // Only migrate shape we can actually read; leave anything else untouched.
+    const parsed: unknown = JSON.parse(legacy);
+    if (!Array.isArray(parsed)) return;
+    localStorage.setItem(KEY, legacy);
+    localStorage.removeItem(LEGACY_KEY);
+  } catch {
+    /* corrupt legacy entry — ignore, same as a failed read */
+  }
+}
+
 export function loadHistory(): HistoryEntry[] {
+  migrateLegacyKey();
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];

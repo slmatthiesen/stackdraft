@@ -44,4 +44,34 @@ describe("design history (localStorage)", () => {
     addHistory("persisted", result());
     expect(loadHistory().map((e) => e.prompt)).toEqual(["persisted"]);
   });
+
+  it("migrates legacy Stackdraft key into the Drafture key, once", () => {
+    // Pre-rename data lives under the old key; the new key is empty.
+    localStorage.setItem(
+      "stackdraft.history.v1",
+      JSON.stringify([
+        { id: "legacy-1", prompt: "legacy plan", result: result("budget"), savedAt: 1 },
+      ]),
+    );
+    const loaded = loadHistory();
+    expect(loaded.map((e) => e.prompt)).toEqual(["legacy plan"]);
+    // Moved: new key now holds it, old key is gone.
+    expect(localStorage.getItem("drafture.history.v1")).not.toBeNull();
+    expect(localStorage.getItem("stackdraft.history.v1")).toBeNull();
+    // Idempotent: a second load keeps the data and doesn't re-touch the old key.
+    expect(loadHistory().map((e) => e.prompt)).toEqual(["legacy plan"]);
+  });
+
+  it("does not clobber newer history with legacy data", () => {
+    addHistory("new plan", result("resilient"));
+    localStorage.setItem(
+      "stackdraft.history.v1",
+      JSON.stringify([
+        { id: "legacy-1", prompt: "legacy plan", result: result("budget"), savedAt: 1 },
+      ]),
+    );
+    expect(loadHistory().map((e) => e.prompt)).toEqual(["new plan"]);
+    // Legacy key left alone since the current key already has data.
+    expect(localStorage.getItem("stackdraft.history.v1")).not.toBeNull();
+  });
 });
