@@ -49,6 +49,11 @@ export const CostDriverSchema = z
       .describe("The service's NATIVE cost unit (R6): 'per 1k requests', '$/GB-month', '$/hr', '$/GB transferred', ..."),
     estimateRange: z.string().describe("A range like '$0.20–$0.90', filled deterministically from PricingStore."),
     note: z.string().describe("Optional clarifying note (e.g. 'required by private-subnet default'). Empty string if none."),
+    // The instance class this capacity driver was priced at (e.g. 't4g.small',
+    // 'db.r6g.large'), stamped by the cost engine when it resolves an instance-backed
+    // $/hr service. PRESENT only on those drivers; the client size-ladder uses it as
+    // the absolute-price baseline for a manual re-size (no ratio guessing).
+    instanceType: z.string().optional().describe("Instance class priced (e.g. 't4g.small'); set only on instance-backed $/hr drivers."),
   })
   .strict();
 

@@ -43,3 +43,16 @@ export interface PricingFact {
   note: string;
   source: string;
 }
+
+/**
+ * The shared instance-size price table (`instance-prices.seed.json`): an
+ * `instanceType → us-east-1 on-demand $/hr` map under `prices`, used by BOTH the
+ * API cost engine (honor the architect's stated instance size, else a tier
+ * default) and the web size-ladder (absolute-price manual override — no ratios).
+ * `_note` carries the grounded-estimate disclaimer. Order-of-magnitude, never a
+ * live quote.
+ */
+export interface InstancePriceTable {
+  _note: string;
+  prices: Record<string, number>;
+}

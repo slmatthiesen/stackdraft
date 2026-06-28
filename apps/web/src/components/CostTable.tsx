@@ -9,7 +9,7 @@
  */
 
 import type { CostDriver } from "../lib/types.js";
-import { driverKey, ladderForDriver, type SizeId } from "../lib/sizeLadder.js";
+import { driverKey, ladderForDriver, defaultSizeForDriver, type SizeId } from "../lib/sizeLadder.js";
 import { SizeSelector } from "./SizeSelector.js";
 
 /** The FULL cost-driver table. Rendered inside the collapsible CostEstimate's
@@ -47,7 +47,7 @@ export function CostTable({
                   {ladder && onSizeChange && sizeSelection && (
                     <SizeSelector
                       ladder={ladder}
-                      selectedId={sizeSelection[key] ?? ladder.defaultId}
+                      selectedId={sizeSelection[key] ?? defaultSizeForDriver(d, ladder)}
                       ariaLabel={d.service}
                       onSelect={(id) => onSizeChange(key, id)}
                     />

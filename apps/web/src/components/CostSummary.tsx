@@ -32,11 +32,14 @@ export function CostSummary({
   const baseline = baselineCost(drivers);
   const hasBaseline = baseline >= 0.5; // a real always-on floor vs. scales-to-zero
 
-  const traffic = tierName ? assumedTraffic(tierName) : null;
-  const marginal = tierName ? marginalPer10kRequests(drivers, tierName) : 0;
+  // Traffic is its own axis now — the same assumed volume across all tiers — so the
+  // figure no longer depends on which tier this is; tierName only gates whether to
+  // show the traffic context at all.
+  const traffic = tierName ? assumedTraffic() : null;
+  const marginal = tierName ? marginalPer10kRequests(drivers) : 0;
   const marginalTip =
     marginal >= 0.005
-      ? `Scales with traffic: about +$${formatMoney(marginal)} per additional 10K requests/mo at this tier.`
+      ? `Scales with traffic: about +$${formatMoney(marginal)} per additional 10K requests/mo.`
       : undefined;
 
   return (

@@ -37,10 +37,10 @@ describe("cost rollup (lib/cost)", () => {
     expect(rollup.partial).toBe(true);
   });
 
-  it("maps each tier to its assumed request volume (per day + per 30-day month)", () => {
-    expect(assumedTraffic("budget")).toEqual({ perDay: 1_000, perMonth: 30_000 });
-    expect(assumedTraffic("balanced")).toEqual({ perDay: 10_000, perMonth: 300_000 });
-    expect(assumedTraffic("resilient")).toEqual({ perDay: 100_000, perMonth: 3_000_000 });
+  it("assumes ONE request volume for all tiers (traffic is its own axis, not per-tier)", () => {
+    // Reversed the per-tier scale ladder: the same default volume (~10k/day ≈ 300k/mo,
+    // the <50k-visitor band) regardless of tier — tiers differ by robustness, not traffic.
+    expect(assumedTraffic()).toEqual({ perDay: 10_000, perMonth: 300_000 });
   });
 
   it("formats request counts compactly", () => {
@@ -50,14 +50,14 @@ describe("cost rollup (lib/cost)", () => {
     expect(formatRequests(3_000_000)).toBe("3M");
   });
 
-  it("marginalPer10kRequests is the variable cost slope over the tier's request band", () => {
-    // $0.70–$7.00/mo request-priced driver at balanced: spread $6.30 over the 900k/mo
-    // band (90 × 10k/day) ⇒ $6.30 × 10_000 / 900_000 = $0.07 per 10K requests.
+  it("marginalPer10kRequests is the variable cost slope over the assumed request band", () => {
+    // $0.70–$7.00/mo request-priced driver: spread $6.30 over the 900k/mo band
+    // (90 × 10k/day) ⇒ $6.30 × 10_000 / 900_000 = $0.07 per 10K requests.
     const variable = [driver("$0.70–$7.00/mo")];
-    expect(marginalPer10kRequests(variable, "balanced")).toBeCloseTo(0.07, 4);
+    expect(marginalPer10kRequests(variable)).toBeCloseTo(0.07, 4);
     // Always-on capacity ($/hr) is excluded — it doesn't grow with request volume.
     const fixed: CostDriver[] = [{ service: "ALB", unit: "$/hr", estimateRange: "$32–$65/mo", note: "" }];
-    expect(marginalPer10kRequests(fixed, "balanced")).toBe(0);
+    expect(marginalPer10kRequests(fixed)).toBe(0);
   });
 });
 

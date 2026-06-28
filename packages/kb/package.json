@@ -9,6 +9,7 @@
     "./security-baselines.json": "./security-baselines.json",
     "./reference-architectures.json": "./reference-architectures.json",
     "./pricing-facts.seed.json": "./pricing-facts.seed.json",
+    "./instance-prices.seed.json": "./instance-prices.seed.json",
     "./glossary.json": "./glossary.json"
   },
   "scripts": {

@@ -11,7 +11,7 @@
 import { useMemo } from "react";
 import type { CostDriver } from "../lib/types.js";
 import { applySizeSelection, rollupCost, formatCostBand, parseMonthlyRange } from "../lib/cost.js";
-import { driverKey, ladderForDriver, type SizeId } from "../lib/sizeLadder.js";
+import { driverKey, ladderForDriver, defaultSizeForDriver, type SizeId } from "../lib/sizeLadder.js";
 import { CostTable } from "./CostTable.js";
 import { GlossaryText } from "./GlossaryText.js";
 import { SizeSelector } from "./SizeSelector.js";
@@ -68,7 +68,7 @@ export function CostEstimate({
                 {ladder && onSizeChange && sizeSelection && (
                   <SizeSelector
                     ladder={ladder}
-                    selectedId={sizeSelection[key] ?? ladder.defaultId}
+                    selectedId={sizeSelection[key] ?? defaultSizeForDriver(d, ladder)}
                     ariaLabel={d.service}
                     onSelect={(id) => onSizeChange(key, id)}
                   />

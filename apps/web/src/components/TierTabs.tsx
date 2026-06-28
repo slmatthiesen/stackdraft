@@ -11,12 +11,7 @@ import { useMemo, useState } from "react";
 import type { Tier, TierName } from "../lib/types.js";
 import { graphToMermaid } from "../lib/mermaid.js";
 import { applySizeSelection } from "../lib/cost.js";
-import {
-  defaultSizeFor,
-  driverKey,
-  ladderForDriver,
-  type SizeId,
-} from "../lib/sizeLadder.js";
+import { type SizeId } from "../lib/sizeLadder.js";
 import { DiagramView } from "./DiagramView.js";
 import { CostEstimate } from "./CostEstimate.js";
 import { CostSummary } from "./CostSummary.js";
@@ -46,23 +41,19 @@ export function TierTabs({
 }): JSX.Element {
   const tier = tiers.find((t) => t.name === selected) ?? tiers[0];
 
-  // Per-tier instance-size overrides. Defaults vary by tier (Budget→small,
-  // Balanced→medium, Resilient→large) so a fresh Budget estimate already shows a
-  // cheap box; user tweaks persist per tier (and seed with no first-paint flash).
-  // `scaledDrivers` is what the cost views render, so every price tracks the
-  // selected sizes live — pure client-side, no API call.
+  // Per-tier instance-size overrides — only the user's EXPLICIT picks. There is no
+  // auto-seeded default selection anymore: the server already priced each box at the
+  // architect's size (or a tier default) and stamped its `instanceType`, so an empty
+  // selection renders the server prices as-is. A pick re-prices off the absolute
+  // instance table (see applySizeSelection) — no per-tier ratio, so no double-apply.
   const [sizeByTier, setSizeByTier] = useState<
     Partial<Record<TierName, Record<string, SizeId>>>
   >({});
 
-  const sizeSelection = useMemo<Record<string, SizeId>>(() => {
-    if (!tier) return {};
-    const seeded: Record<string, SizeId> = {};
-    for (const d of tier.costDrivers) {
-      if (ladderForDriver(d)) seeded[driverKey(d)] = defaultSizeFor(tier.name);
-    }
-    return { ...seeded, ...(sizeByTier[tier.name] ?? {}) };
-  }, [tier, sizeByTier]);
+  const sizeSelection = useMemo<Record<string, SizeId>>(
+    () => (tier ? (sizeByTier[tier.name] ?? {}) : {}),
+    [tier, sizeByTier],
+  );
 
   const scaledDrivers = useMemo(
     () => (tier ? applySizeSelection(tier.costDrivers, sizeSelection) : []),

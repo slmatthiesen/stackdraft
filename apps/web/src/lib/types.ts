@@ -34,6 +34,10 @@ export interface CostDriver {
   estimateRange: string;
   /** Clarifying note (e.g. 'required by private-subnet default'); empty string when none. */
   note: string;
+  /** Instance class the server priced this $/hr line at (e.g. 't4g.small'); set only
+   *  on instance-backed capacity drivers. The size-ladder uses it as the absolute-price
+   *  baseline for a manual re-size (no ratio guessing → no double-apply). */
+  instanceType?: string;
 }
 
 export interface Tier {

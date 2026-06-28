@@ -143,7 +143,7 @@ describe("App (U10 + E6 intake)", () => {
     expect(screen.getByRole("heading", { name: "A photo-sharing API" })).toBeInTheDocument();
     expect(screen.queryByLabelText("System description")).not.toBeInTheDocument();
     // Intake (E6) is shown once before generation — no fetch yet.
-    expect(screen.getByText(/answer 2 quick questions/i)).toBeInTheDocument();
+    expect(screen.getByText(/answer 3 quick questions/i)).toBeInTheDocument();
     expect(generateCalls()).toHaveLength(0);
   });
 
