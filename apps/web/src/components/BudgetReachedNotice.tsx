@@ -1,6 +1,6 @@
 /**
  * Shown when the global daily spend ceiling is hit (`daily_budget_reached`) —
- * i.e. Stackdraft has run out of funds for the day. Surfaced immediately in the
+ * i.e. Drafture has run out of funds for the day. Surfaced immediately in the
  * page where the result/Terraform would have appeared, so the visitor gets a
  * friendly explanation and a way to reach the operator instead of a dead end.
  *
@@ -14,7 +14,7 @@ export function BudgetReachedNotice(): JSX.Element {
   return (
     <div className="banner banner--warn budget-out" role="alert">
       <p className="budget-out__text">
-        <strong>I'm out of money for today — sorry!</strong> Stackdraft is a free,
+        <strong>I'm out of money for today — sorry!</strong> Drafture is a free,
         self-funded demo and it has hit its daily spend limit.{" "}
         <a href={LINKEDIN_URL} target="_blank" rel="noreferrer noopener">
           Message me on LinkedIn

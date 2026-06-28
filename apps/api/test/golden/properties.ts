@@ -12,8 +12,8 @@
  * pass-rate, which is the TRACKED metric (not asserted at a fixed value) — it
  * gates model/KB swaps by flagging a drop, not by hard-coding a number.
  */
-import securityBaselines from "@stackdraft/kb/security-baselines.json" with { type: "json" };
-import type { SecurityBaseline } from "@stackdraft/kb";
+import securityBaselines from "@drafture/kb/security-baselines.json" with { type: "json" };
+import type { SecurityBaseline } from "@drafture/kb";
 
 import { TIER_NAMES } from "../../src/schema/architecture.js";
 import type { ArchitectureResult, Tier } from "../../src/schema/architecture.js";

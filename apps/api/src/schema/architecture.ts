@@ -94,7 +94,7 @@ export const KeyDecisionSchema = z
 // (`ArchitectureResultSchema`) adds them back. This is the main cost/speed lever:
 // the model stops emitting fixed/recomputable content every request, and that
 // content is correct by construction instead of by re-reasoning.
-//   - securityFloor: the 8 safe-by-default baselines, injected from `@stackdraft/kb`.
+//   - securityFloor: the 8 safe-by-default baselines, injected from `@drafture/kb`.
 //   - costDrivers: per-tier $ ranges, computed by `estimateCosts` from the tier's
 //     services + the PricingStore (KTD6 — the model is never asked for dollar
 //     figures). Dropping ~24-40 cost-driver objects per design also cuts a large

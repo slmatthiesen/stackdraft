@@ -14,14 +14,14 @@
  * The sentinel month sorts below any real "YYYY-MM", so replacing it never
  * touches a refreshed snapshot and `get` still prefers the real month.
  */
-import securityBaselines from "@stackdraft/kb/security-baselines.json" with { type: "json" };
-import referenceArchitectures from "@stackdraft/kb/reference-architectures.json" with { type: "json" };
-import pricingFacts from "@stackdraft/kb/pricing-facts.seed.json" with { type: "json" };
+import securityBaselines from "@drafture/kb/security-baselines.json" with { type: "json" };
+import referenceArchitectures from "@drafture/kb/reference-architectures.json" with { type: "json" };
+import pricingFacts from "@drafture/kb/pricing-facts.seed.json" with { type: "json" };
 import type {
   SecurityBaseline,
   ReferenceArchitecture,
   PricingFact,
-} from "@stackdraft/kb";
+} from "@drafture/kb";
 
 import type { MemoryStore, PricingStore, PriceRecord } from "./types.js";
 

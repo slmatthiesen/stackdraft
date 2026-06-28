@@ -2,7 +2,7 @@
 
 ## Supported scope
 
-Stackdraft is an actively developed showcase project. Security fixes are applied to the latest `main`; there are no separately maintained release branches in V1. Please report against current `main`.
+Drafture is an actively developed showcase project. Security fixes are applied to the latest `main`; there are no separately maintained release branches in V1. Please report against current `main`.
 
 The reportable surface includes:
 
@@ -27,7 +27,7 @@ We aim to acknowledge a report within a few days, confirm the issue, and coordin
 
 ## Safe-by-default posture
 
-Stackdraft is built to model the practices the tool itself recommends:
+Drafture is built to model the practices the tool itself recommends:
 
 - **No secrets in the tree or history.** Only `.env.example` (placeholders) is tracked; `.env`, `*.db`, and build artifacts are git-ignored. A gitleaks scan runs in CI on every push and PR, and a pre-publish audit gated the very first commit.
 - **Secrets load from env and are redacted** in logs and error responses.

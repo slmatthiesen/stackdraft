@@ -10,7 +10,7 @@ import { useState } from "react";
 import { voteCurated } from "../lib/api.js";
 import type { CuratedSummary } from "../lib/types.js";
 
-const VOTE_KEY = "stackdraft.curated.votes.v1";
+const VOTE_KEY = "drafture.curated.votes.v1";
 
 type VoteValue = 1 | -1;
 

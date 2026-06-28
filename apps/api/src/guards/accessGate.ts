@@ -29,7 +29,7 @@ function constantTimeEquals(a: string, b: string): boolean {
 function unauthorized(reply: FastifyReply): FastifyReply {
   return reply
     .code(401)
-    .header("WWW-Authenticate", 'Basic realm="stackdraft", charset="UTF-8"')
+    .header("WWW-Authenticate", 'Basic realm="drafture", charset="UTF-8"')
     .send({ error: "unauthorized", message: "Valid demo credentials required." });
 }
 

@@ -75,7 +75,7 @@ const ConfigSchema = z.object({
   RESEARCH_MAX_CALLS_PER_REQUEST: z.coerce.number().int().nonnegative().default(2),
 
   // Storage
-  DB_PATH: z.string().default("./data/stackdraft.db"),
+  DB_PATH: z.string().default("./data/drafture.db"),
 
   // Static SPA build directory served by the API
   WEB_DIST: z.string().default("../web/dist"),

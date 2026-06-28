@@ -437,7 +437,7 @@ export async function refreshPricing(opts: RefreshOptions): Promise<RefreshResul
   }
 }
 
-// ── CLI entrypoint (pnpm --filter @stackdraft/api refresh-pricing) ───────────
+// ── CLI entrypoint (pnpm --filter @drafture/api refresh-pricing) ───────────
 
 async function main(): Promise<void> {
   const config = getConfig();

@@ -2,7 +2,7 @@
  * Frontend mirror of the API's structured-architecture contract.
  *
  * SOURCE OF TRUTH: `apps/api/src/schema/architecture.ts` (Zod). These interfaces
- * are kept in sync MANUALLY for V1 — a shared `@stackdraft/schema` package that
+ * are kept in sync MANUALLY for V1 — a shared `@drafture/schema` package that
  * both sides import is a later refactor. If you change the API schema, update
  * this file too (and the api client in `./api.ts`).
  */

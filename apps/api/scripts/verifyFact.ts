@@ -1,9 +1,9 @@
 /**
  * Operator review CLI (U6 / KTD4): promote or reject a quarantined research fact.
  *
- *   pnpm --filter @stackdraft/api verify-fact <id>            # trust it (verified:true)
- *   pnpm --filter @stackdraft/api verify-fact --reject <id>   # delete it
- *   pnpm --filter @stackdraft/api verify-fact <id> --reject   # (either order)
+ *   pnpm --filter @drafture/api verify-fact <id>            # trust it (verified:true)
+ *   pnpm --filter @drafture/api verify-fact --reject <id>   # delete it
+ *   pnpm --filter @drafture/api verify-fact <id> --reject   # (either order)
  *
  * Promotion lifts a fact out of the `verified:false` quarantine into the trusted
  * set; rejection removes a sloppy research result so it can't keep grounding
@@ -15,7 +15,7 @@ import { resolve } from "node:path";
 
 import { getDb, createStores } from "../src/store/sqlite.js";
 
-const DEFAULT_DB_PATH = "./data/stackdraft.db";
+const DEFAULT_DB_PATH = "./data/drafture.db";
 
 interface ParsedArgs {
   id?: string;

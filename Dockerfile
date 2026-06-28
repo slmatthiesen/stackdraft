@@ -17,8 +17,8 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/kb/package.json packages/kb/package.json
 RUN pnpm install --frozen-lockfile || pnpm install
 COPY . .
-RUN pnpm --filter @stackdraft/web build \
-    && pnpm --filter @stackdraft/api build
+RUN pnpm --filter @drafture/web build \
+    && pnpm --filter @drafture/api build
 
 FROM base AS runtime
 ENV NODE_ENV=production
@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
 COPY apps/api/package.json apps/api/package.json
 COPY packages/kb/package.json packages/kb/package.json
-RUN pnpm install --prod --frozen-lockfile --filter @stackdraft/api... || pnpm install --prod --filter @stackdraft/api...
+RUN pnpm install --prod --frozen-lockfile --filter @drafture/api... || pnpm install --prod --filter @drafture/api...
 RUN apt-get purge -y g++ make python3 && apt-get autoremove -y
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/apps/web/dist apps/web/dist
@@ -37,6 +37,6 @@ COPY --from=build /app/packages/kb packages/kb
 ENV WEB_DIST=/app/apps/web/dist
 # SQLite data persists on a mounted volume (U12).
 VOLUME ["/app/data"]
-ENV DB_PATH=/app/data/stackdraft.db
+ENV DB_PATH=/app/data/drafture.db
 EXPOSE 8080
 CMD ["node", "apps/api/dist/server.js"]

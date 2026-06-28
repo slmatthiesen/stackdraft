@@ -264,7 +264,7 @@ export function App(): JSX.Element {
   return (
     <main className={`app ${submitted ? "app--submitted" : ""}`}>
       <header className="app__header">
-        <span className="app__brand">Stackdraft</span>
+        <span className="app__brand">Drafture</span>
         {submitted ? (
           <h1 className="app__goal">
             <button

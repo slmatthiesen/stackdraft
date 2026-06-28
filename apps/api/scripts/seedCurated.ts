@@ -10,7 +10,7 @@
  * COST: each prompt is a real model generation (~$0.10, ~90s on Sonnet). This spends
  * outside the $5/day request ceiling by design; keep the demo list short.
  *
- * Run:  pnpm --filter @stackdraft/api exec node --env-file=../../.env --import tsx scripts/seedCurated.ts
+ * Run:  pnpm --filter @drafture/api exec node --env-file=../../.env --import tsx scripts/seedCurated.ts
  * Idempotent: re-running replaces each run's content by id but KEEPS accumulated votes.
  * Filter: set SEED_IDS=url-shortener,realtime-chat to re-seed only those demos (by slug);
  *         default re-seeds ALL demos. Use this to refresh specific designs without

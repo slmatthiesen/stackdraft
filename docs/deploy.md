@@ -1,6 +1,6 @@
-# Deploying Stackdraft
+# Deploying Drafture
 
-Stackdraft ships as a **single Docker container** (R12): the Fastify API serves the
+Drafture ships as a **single Docker container** (R12): the Fastify API serves the
 built React SPA and exposes `/api/*`, with SQLite persisted on a mounted volume so
 memory, pricing, response cache, and the spend ledger survive redeploys. The hosted
 demo runs on **DigitalOcean** behind **Cloudflare**.
@@ -30,7 +30,7 @@ docker compose up --build
 ```
 
 This builds the multi-stage image and starts the app on port **8080** with a named
-volume (`stackdraft-data`) mounted at `/app/data`. Verify:
+volume (`drafture-data`) mounted at `/app/data`. Verify:
 
 ```bash
 curl -s http://localhost:8080/api/health
@@ -43,8 +43,8 @@ key). Stop with `Ctrl-C`; data persists in the volume across restarts.
 To build the image without Compose:
 
 ```bash
-docker build -t stackdraft:latest .
-docker run --rm -p 8080:8080 --env-file .env -v stackdraft-data:/app/data stackdraft:latest
+docker build -t drafture:latest .
+docker run --rm -p 8080:8080 --env-file .env -v drafture-data:/app/data drafture:latest
 ```
 
 ---
@@ -62,7 +62,7 @@ the entire datastore. Pick one of the two paths below.
    **on the host** — never commit it, never bake it into the image:
 
    ```bash
-   scp .env root@<droplet-ip>:/opt/stackdraft/.env
+   scp .env root@<droplet-ip>:/opt/drafture/.env
    ```
 
 3. Build and run (Compose handles the named volume):
@@ -74,11 +74,11 @@ the entire datastore. Pick one of the two paths below.
    Or, if you build/push the image elsewhere (registry), pull and run directly:
 
    ```bash
-   docker run -d --restart unless-stopped -p 8080:8080 --env-file /opt/stackdraft/.env -v stackdraft-data:/app/data --name stackdraft <registry>/stackdraft:latest
+   docker run -d --restart unless-stopped -p 8080:8080 --env-file /opt/drafture/.env -v drafture-data:/app/data --name drafture <registry>/drafture:latest
    ```
 
-4. The SQLite file lives at `/app/data/stackdraft.db` **inside the container**, backed
-   by the `stackdraft-data` Docker volume on the host — it persists across
+4. The SQLite file lives at `/app/data/drafture.db` **inside the container**, backed
+   by the `drafture-data` Docker volume on the host — it persists across
    `docker compose up -d --build` redeploys.
 5. Point Cloudflare at the Droplet's public IP (section 3). Keep `8080` reachable only
    from Cloudflare if you want to force edge traffic (firewall rule allowing Cloudflare
@@ -97,7 +97,7 @@ the entire datastore. Pick one of the two paths below.
 5. App Platform terminates TLS and gives you a public hostname; put Cloudflare in front
    of that hostname (section 3).
 
-> Either path: `DB_PATH=/app/data/stackdraft.db` is already set in the image, and SQLite
+> Either path: `DB_PATH=/app/data/drafture.db` is already set in the image, and SQLite
 > on the mounted volume is what makes memory/pricing/cache/ledger survive redeploys.
 
 ---
@@ -157,8 +157,8 @@ is **not** compiled into the runtime image (which prunes devDeps). Run it from t
 volume**:
 
 ```bash
-docker build --target build -t stackdraft:build .
-docker run --rm -v stackdraft-data:/app/data --env-file .env stackdraft:build pnpm --filter @stackdraft/api refresh-pricing
+docker build --target build -t drafture:build .
+docker run --rm -v drafture-data:/app/data --env-file .env drafture:build pnpm --filter @drafture/api refresh-pricing
 ```
 
 Schedule that command monthly with whatever fits your platform:
@@ -178,14 +178,14 @@ failed refresh degrades gracefully; it never breaks live requests.
 ## 6. Operational notes
 
 **Where the data lives.** Everything is one SQLite file at
-`/app/data/stackdraft.db` inside the container, backed by the `stackdraft-data` volume on
+`/app/data/drafture.db` inside the container, backed by the `drafture-data` volume on
 the host. It holds the memory store (incl. quarantined research facts), the response
 cache, the pricing cache, and the spend ledger.
 
 **Back it up.** SQLite is a single file — copy it from the volume. Example (Droplet):
 
 ```bash
-docker run --rm -v stackdraft-data:/app/data -v "$PWD":/backup alpine sh -c "cp /app/data/stackdraft.db /backup/stackdraft-$(date +%F).db"
+docker run --rm -v drafture-data:/app/data -v "$PWD":/backup alpine sh -c "cp /app/data/drafture.db /backup/drafture-$(date +%F).db"
 ```
 
 (For a hot copy under load, prefer `sqlite3 .backup` over a raw `cp`.) Store backups off
@@ -196,12 +196,12 @@ stored `verified:false` and flagged "unverified" in output until you promote the
 the CLI on the host (against the same DB / volume):
 
 ```bash
-docker run --rm -v stackdraft-data:/app/data --env-file .env stackdraft:build pnpm --filter @stackdraft/api list-pending-facts
-docker run --rm -v stackdraft-data:/app/data --env-file .env stackdraft:build pnpm --filter @stackdraft/api verify-fact <id>
+docker run --rm -v drafture-data:/app/data --env-file .env drafture:build pnpm --filter @drafture/api list-pending-facts
+docker run --rm -v drafture-data:/app/data --env-file .env drafture:build pnpm --filter @drafture/api verify-fact <id>
 ```
 
 (`verify-fact <id> --reject` deletes a bad fact.) These run via `tsx` so use the
-`stackdraft:build` image, same as the refresh job. There is no admin HTTP surface in V1 —
+`drafture:build` image, same as the refresh job. There is no admin HTTP surface in V1 —
 review happens on the host with DB access.
 
 **Cost levers.** The worst-case bill is bounded by, in order of impact:

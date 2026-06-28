@@ -21,8 +21,8 @@
  * an explicit assumed-throughput note. Data transfer (internet egress, cross-AZ,
  * NAT processed + hourly) is a first-class unit.
  */
-import pricingFacts from "@stackdraft/kb/pricing-facts.seed.json" with { type: "json" };
-import type { PricingFact } from "@stackdraft/kb";
+import pricingFacts from "@drafture/kb/pricing-facts.seed.json" with { type: "json" };
+import type { PricingFact } from "@drafture/kb";
 
 import type {
   ArchitectureBeforeCost,

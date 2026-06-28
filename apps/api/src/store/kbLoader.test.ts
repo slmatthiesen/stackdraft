@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
-import securityBaselines from "@stackdraft/kb/security-baselines.json" with { type: "json" };
-import referenceArchitectures from "@stackdraft/kb/reference-architectures.json" with { type: "json" };
-import type { SecurityBaseline, ReferenceArchitecture } from "@stackdraft/kb";
+import securityBaselines from "@drafture/kb/security-baselines.json" with { type: "json" };
+import referenceArchitectures from "@drafture/kb/reference-architectures.json" with { type: "json" };
+import type { SecurityBaseline, ReferenceArchitecture } from "@drafture/kb";
 
 import { openTempDb, createStores, type Db, type Stores } from "./sqlite.js";
 import { seedKnowledgeBase, SEED_PRICING_MONTH } from "./kbLoader.js";

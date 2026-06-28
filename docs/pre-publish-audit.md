@@ -5,7 +5,7 @@ the working tree **or git history**, that defaults are forker-safe, and that
 dependencies are clean. Re-run this checklist before any `git push` to a public
 remote.
 
-**Status: ✅ PASS** — audited at commit on `feat/stackdraft-v1` (date: 2026-06-26).
+**Status: ✅ PASS** — audited at commit on `feat/drafture-v1` (date: 2026-06-26).
 
 ## How to re-run
 
@@ -50,7 +50,7 @@ pnpm audit --prod
   Turnstile and the access gate are defense-in-depth a deployer opts into.
 - **History note.** Per the plan U14 intended the first commit to be deferred until
   this gate passed. With the operator's explicit go-ahead, work was committed
-  incrementally on `feat/stackdraft-v1` for safety checkpoints; secret hygiene was
+  incrementally on `feat/drafture-v1` for safety checkpoints; secret hygiene was
   in place from commit 1 (`.gitignore` excludes `.env`/`*.db`, only `.env.example`
   tracked), so **history is clean by construction** — this gate verifies that
   property rather than relying on a single deferred commit.

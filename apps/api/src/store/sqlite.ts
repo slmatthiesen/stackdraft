@@ -143,7 +143,7 @@ export function openTempDb(): Db {
 
 /** A unique temp-file path for tests that exercise the real on-disk path. */
 export function tempDbPath(): string {
-  return join(tmpdir(), `stackdraft-test-${randomUUID()}.db`);
+  return join(tmpdir(), `drafture-test-${randomUUID()}.db`);
 }
 
 export interface Stores {

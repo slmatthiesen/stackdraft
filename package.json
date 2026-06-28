@@ -1,5 +1,5 @@
 {
-  "name": "stackdraft",
+  "name": "drafture",
   "version": "0.1.0",
   "private": true,
   "description": "Describe a system, get a safe, costed AWS design.",
@@ -11,15 +11,15 @@
   "packageManager": "pnpm@10.5.0",
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm --filter @stackdraft/api dev",
-    "dev:web": "pnpm --filter @stackdraft/web dev",
+    "dev": "pnpm --filter @drafture/api dev",
+    "dev:web": "pnpm --filter @drafture/web dev",
     "test": "pnpm -r test",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
-    "list-pending-facts": "pnpm --filter @stackdraft/api list-pending-facts",
-    "verify-fact": "pnpm --filter @stackdraft/api verify-fact",
-    "refresh-pricing": "pnpm --filter @stackdraft/api refresh-pricing",
-    "eval": "pnpm --filter @stackdraft/api eval"
+    "list-pending-facts": "pnpm --filter @drafture/api list-pending-facts",
+    "verify-fact": "pnpm --filter @drafture/api verify-fact",
+    "refresh-pricing": "pnpm --filter @drafture/api refresh-pricing",
+    "eval": "pnpm --filter @drafture/api eval"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
