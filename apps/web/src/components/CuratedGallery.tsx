@@ -97,7 +97,7 @@ export function CuratedGallery({
             </>
           ) : (
             <>
-              <strong>This site is built on its own StackDraft plan.</strong>
+              <strong>This site is built on its own Drafture plan.</strong>
               <span className="gallery__featured-sub">See how it was designed →</span>
             </>
           )}

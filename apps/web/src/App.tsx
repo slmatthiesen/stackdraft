@@ -263,7 +263,6 @@ export function App(): JSX.Element {
         <span className="app__brand">Drafture</span>
         {submitted && (
           <div className="app__header-actions">
-            <CopyButton text={goal} label="Copy description" />
             <button type="button" className="result__back" onClick={backToStart}>
               ← All examples
             </button>
@@ -286,6 +285,7 @@ export function App(): JSX.Element {
                 {goalExpanded ? "▲" : "▼"}
               </span>
             </button>
+            <CopyButton text={goal} variant="icon" />
           </h1>
         ) : (
           <p className="app__tagline">
@@ -404,6 +404,17 @@ export function App(): JSX.Element {
 
       {phase === "result" && result && (
         <>
+          {/* Diagram leads: the tier tabs (Budget/Balanced/Resilient, Balanced
+              pre-selected) sit at the top so the design is visible immediately. */}
+          <TierTabs
+            tiers={result.tiers}
+            assumptions={result.assumptions}
+            selected={selectedTier}
+            onSelect={setSelectedTier}
+          />
+
+          {/* Useful-design rating sits just above the key decisions — after the
+              reader has seen the diagram, before the reasoning. */}
           {feedbackFresh && (
             <section className="banner banner--recommend">
               <div
@@ -435,15 +446,6 @@ export function App(): JSX.Element {
               </div>
             </section>
           )}
-
-          {/* Diagram leads: the tier tabs (Budget/Balanced/Resilient, Balanced
-              pre-selected) sit at the top so the design is visible immediately. */}
-          <TierTabs
-            tiers={result.tiers}
-            assumptions={result.assumptions}
-            selected={selectedTier}
-            onSelect={setSelectedTier}
-          />
 
           <KeyDecisions decisions={result.keyDecisions} />
 

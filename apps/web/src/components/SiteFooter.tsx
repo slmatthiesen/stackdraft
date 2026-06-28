@@ -45,6 +45,9 @@ export function SiteFooter(): JSX.Element {
           <button type="button" className="site-footer__link" onClick={() => setPanel("terms")}>
             Terms &amp; Disclaimer
           </button>
+          <a className="site-footer__link" href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer noopener">
+            Contact
+          </a>
           <a className="site-footer__link" href={GITHUB_URL} target="_blank" rel="noreferrer noopener">
             GitHub
           </a>

@@ -98,6 +98,7 @@ body {
 }
 
 .app__goal {
+  position: relative;
   color: var(--ink);
   font-size: 1.25rem;
   margin: 0.25rem 0 0;
@@ -625,9 +626,23 @@ body {
   padding: 0.6rem 1.4rem;
   border: none;
   border-radius: var(--radius);
-  background: var(--ink);
+  /* Brand-olive CTA, matching the primary "Design it" on the landing prompt. */
+  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-dark) 100%);
   color: #fff;
   font-weight: 600;
+  box-shadow: 0 1px 2px rgba(74, 60, 31, 0.18), 0 8px 20px rgba(70, 96, 31, 0.22);
+  transition: filter 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.intake__design:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(74, 60, 31, 0.2), 0 12px 26px rgba(70, 96, 31, 0.26);
+}
+
+.intake__design:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(74, 60, 31, 0.18);
 }
 
 .intake__skip {
@@ -712,6 +727,56 @@ body {
   border-radius: var(--radius);
   background: transparent;
   color: inherit;
+}
+
+/* Icon-only variant: a borderless clipboard glyph for tight slots. */
+.copy-btn--icon {
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.copy-btn--icon:hover {
+  color: var(--brand-dark);
+  background: rgba(70, 96, 31, 0.08);
+}
+
+.copy-btn--icon.copy-btn--copied {
+  color: var(--brand-dark);
+}
+
+/* Copy affordance inside the goal/description box: top-right, above the toggle. */
+.app__goal .copy-btn--icon {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.4rem;
+  z-index: 1;
+}
+
+/* "How to use this Terraform →" link in the reference-config panel. */
+.refconfig__howto-link {
+  display: block;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--brand-dark);
+  cursor: pointer;
+  text-align: left;
+}
+
+.refconfig__howto-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
 }
 
 .refconfig__code {
@@ -851,7 +916,7 @@ body {
   text-align: center;
 }
 
-/* "This site is built on its own StackDraft plan" — featured dogfooding callout. */
+/* "This site is built on its own Drafture plan" — featured dogfooding callout. */
 .gallery__featured {
   display: flex;
   flex-direction: column;
@@ -1750,6 +1815,16 @@ body {
   background: rgba(74, 60, 31, 0.08);
   padding: 0.05em 0.35em;
   border-radius: 4px;
+}
+
+.info-doc ul,
+.info-doc ol {
+  margin: 0 0 0.85rem;
+  padding-left: 1.3rem;
+}
+
+.info-doc li {
+  margin: 0.25rem 0;
 }
 
 .info-doc__meta {
