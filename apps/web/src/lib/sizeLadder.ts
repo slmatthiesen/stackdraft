@@ -1,96 +1,90 @@
 /**
- * Instance-size ladder for per-tier cost customization (the "instance-size
- * selection" path from the cost-honesty roadmap, GAP 1).
+ * Instance-size ladder — a MANUAL override for per-tier cost customization
+ * (instance sizing, GAP 1).
  *
- * Capacity services ($/hr, always-on) each carry ONE default price in the seed
- * (EC2 = m5.large, RDS = db.t3.medium, …). This ladder lets the UI scale a
- * driver's monthly range by a size RATIO (medium = 1) so a user can right-size a
- * box and watch the price move live — pure client-side, no API call.
+ * The server already prices each capacity ($/hr) instance at the class the architect
+ * chose (or a tier default) and STAMPS the driver with that `instanceType`. This
+ * ladder lets a user swap to a neighboring class and watch the price move — purely
+ * client-side, using the SAME absolute `instance-prices.seed.json` table the server
+ * priced from. No ratios: the re-price is `price[picked] / price[server's class]`, so
+ * the default selection (the server's class) is always a no-op (ratio 1). That kills
+ * the old double-apply trap, where the client multiplied by a per-tier ratio (0.22)
+ * ON TOP of a server price that already reflected the size.
  *
- * Ratios are grounded in real us-east-1 on-demand prices (monthly ≈ usd × 730 hr)
- * but are ESTIMATES — consistent with the existing "order-of-magnitude, never a
- * quote" cost model. The medium entry's ratio (1) + instanceType mirror the seed,
- * so the default band is unchanged until a user picks a different size.
- *
- * The seeded default varies by tier (Budget→small, Balanced→medium, Resilient→
- * large), so a fresh Budget estimate already shows a cheap box — one mechanism
- * delivers both the cost-cleanup goal (GAP 1) and the user-config goal.
+ * Prices are grounded estimates (us-east-1 on-demand), consistent with the
+ * "order-of-magnitude, never a quote" cost model.
  */
-import type { CostDriver, TierName } from "./types.js";
+import instancePrices from "@drafture/kb/instance-prices.seed.json";
+import type { InstancePriceTable } from "@drafture/kb";
+import type { CostDriver } from "./types.js";
 
 export type SizeId = "s" | "m" | "l";
+
+/** instanceType → us-east-1 on-demand $/hr (shared with the API cost engine). */
+export const INSTANCE_PRICES: Record<string, number> = (instancePrices as InstancePriceTable).prices;
+
+export function priceOf(instanceType: string | undefined): number | undefined {
+  return instanceType === undefined ? undefined : INSTANCE_PRICES[instanceType];
+}
 
 export interface SizeOption {
   id: SizeId;
   /** Single-glyph label for the segmented control (S / M / L). */
   label: string;
-  /** Real-ish instance type — shown as the authoritative label next to the control. */
+  /** Real instance class — the authoritative label AND the absolute-price key. */
   instanceType: string;
-  /** Price relative to the seed's default (medium = 1). */
-  ratio: number;
 }
 
 export interface SizeLadder {
-  /** Neutral fallback when no per-tier default applies. */
+  /** Neutral fallback when the driver carries no server-stamped class. */
   defaultId: SizeId;
   sizes: SizeOption[];
 }
 
-// medium (ratio 1) mirrors the seed default for each service; small/large are the
-// neighboring real instance classes at their on-demand price ratio.
+// S/M/L mirror the server's per-tier DEFAULTS for each family (budget→S, balanced→M,
+// resilient→L). Picking one re-prices off its absolute instance price — no ratios.
 export const SIZE_LADDER: Record<string, SizeLadder> = {
   EC2: {
     defaultId: "m",
     sizes: [
-      { id: "s", label: "S", instanceType: "t3.small", ratio: 0.22 },
-      { id: "m", label: "M", instanceType: "m5.large", ratio: 1 },
-      { id: "l", label: "L", instanceType: "m5.xlarge", ratio: 2 },
+      { id: "s", label: "S", instanceType: "t4g.small" },
+      { id: "m", label: "M", instanceType: "t4g.large" },
+      { id: "l", label: "L", instanceType: "m7g.large" },
     ],
   },
   RDS: {
     defaultId: "m",
     sizes: [
-      { id: "s", label: "S", instanceType: "db.t3.micro", ratio: 0.25 },
-      { id: "m", label: "M", instanceType: "db.t3.medium", ratio: 1 },
-      { id: "l", label: "L", instanceType: "db.m5.large", ratio: 2 },
+      { id: "s", label: "S", instanceType: "db.t4g.small" },
+      { id: "m", label: "M", instanceType: "db.t4g.large" },
+      { id: "l", label: "L", instanceType: "db.r6g.large" },
     ],
   },
   ElastiCache: {
     defaultId: "m",
     sizes: [
-      { id: "s", label: "S", instanceType: "cache.t3.micro", ratio: 0.25 },
-      { id: "m", label: "M", instanceType: "cache.t3.medium", ratio: 1 },
-      { id: "l", label: "L", instanceType: "cache.m5.large", ratio: 2 },
+      { id: "s", label: "S", instanceType: "cache.t4g.small" },
+      { id: "m", label: "M", instanceType: "cache.t4g.medium" },
+      { id: "l", label: "L", instanceType: "cache.r6g.large" },
     ],
   },
   Aurora: {
     defaultId: "m",
     sizes: [
-      { id: "s", label: "S", instanceType: "db.t3.small", ratio: 0.5 },
-      { id: "m", label: "M", instanceType: "db.t3.medium", ratio: 1 },
-      { id: "l", label: "L", instanceType: "db.r5.large", ratio: 2 },
+      { id: "s", label: "S", instanceType: "db.t4g.medium" },
+      { id: "m", label: "M", instanceType: "db.r6g.large" },
+      { id: "l", label: "L", instanceType: "db.r6g.xlarge" },
     ],
   },
   OpenSearch: {
     defaultId: "m",
     sizes: [
-      { id: "s", label: "S", instanceType: "t3.micro.search", ratio: 0.5 },
-      { id: "m", label: "M", instanceType: "t3.small.search", ratio: 1 },
-      { id: "l", label: "L", instanceType: "m5.large.search", ratio: 2 },
+      { id: "s", label: "S", instanceType: "t3.small.search" },
+      { id: "m", label: "M", instanceType: "m6g.large.search" },
+      { id: "l", label: "L", instanceType: "r6g.large.search" },
     ],
   },
 };
-
-/** Per-tier seeded size — Budget starts on the cheap box, Resilient on the big one. */
-const TIER_DEFAULT_SIZE: Record<TierName, SizeId> = {
-  budget: "s",
-  balanced: "m",
-  resilient: "l",
-};
-
-export function defaultSizeFor(tier: TierName): SizeId {
-  return TIER_DEFAULT_SIZE[tier];
-}
 
 /** The capacity unit label the seed renders for $/hr services (see lib/cost.ts UNIT_LABEL). */
 const CAPACITY_UNIT_LABEL = "$/hr";
@@ -110,4 +104,22 @@ export function driverKey(d: CostDriver): string {
 export function optionFor(ladder: SizeLadder, id: SizeId | undefined): SizeOption {
   const resolved = id ?? ladder.defaultId;
   return ladder.sizes.find((s) => s.id === resolved) ?? ladder.sizes[1]!;
+}
+
+/**
+ * The size to PRE-SELECT for a driver: the ladder option whose class matches the
+ * server-stamped `instanceType`, else the ladder default. This makes the default
+ * selection the size the server already priced, so the displayed range is unchanged
+ * until the user actively picks a different one (no auto-ratio seeding).
+ */
+export function defaultSizeForDriver(d: CostDriver, ladder: SizeLadder): SizeId {
+  const match = ladder.sizes.find((s) => s.instanceType === d.instanceType);
+  return match?.id ?? ladder.defaultId;
+}
+
+/** The absolute-price baseline a manual re-size scales FROM: the server's stamped
+ *  class if priced, else the pre-selected option's class. */
+export function baseInstanceType(d: CostDriver, ladder: SizeLadder): string {
+  if (d.instanceType !== undefined && INSTANCE_PRICES[d.instanceType] !== undefined) return d.instanceType;
+  return optionFor(ladder, defaultSizeForDriver(d, ladder)).instanceType;
 }

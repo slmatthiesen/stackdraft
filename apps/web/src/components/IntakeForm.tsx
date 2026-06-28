@@ -17,9 +17,11 @@ interface Question {
   options: string[];
 }
 
-// Scale is no longer asked here — it's the Low/Medium/High tier ladder on the
-// result (Medium pre-selected). These two questions shape the DESIGN itself
-// (availability target + compliance), which the tiers don't express.
+// Downtime + data shape the DESIGN (availability target + compliance). Traffic is
+// its OWN axis: the customer states expected monthly VISITORS and the agent sizes
+// capacity from it (the tiers stay robustness variants, not traffic levels). All
+// three are OPTIONAL — skipping falls back to sensible, scalable defaults (traffic
+// defaults to <50k/mo, stated in the result assumptions).
 const QUESTIONS: Question[] = [
   {
     id: "downtime",
@@ -32,6 +34,12 @@ const QUESTIONS: Question[] = [
     label: "Data sensitivity",
     prompt: "Regulated data or multi-tenant?",
     options: ["No", "Regulated (HIPAA/PCI/etc.)", "Multi-tenant SaaS", "Not sure"],
+  },
+  {
+    id: "traffic",
+    label: "Expected monthly visitors",
+    prompt: "Roughly how many monthly visitors?",
+    options: ["< 1k", "< 50k", "< 500k", "Millions"],
   },
 ];
 
@@ -56,7 +64,7 @@ export function IntakeForm({
 
   return (
     <section className="card intake" aria-label="Quick intake">
-      <h2>To tailor the design, answer 2 quick questions — or skip for sensible, scalable defaults.</h2>
+      <h2>To tailor the design, answer {QUESTIONS.length} quick questions — or skip for sensible, scalable defaults.</h2>
       <div className="intake__questions">
         {QUESTIONS.map((q) => (
           <fieldset key={q.id} className="intake__question">

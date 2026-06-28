@@ -4,9 +4,10 @@
  * The design graph (model output) is untouched; only costDrivers + the disclaimer
  * are rewritten. Votes are preserved (only the body column is updated).
  *
- * Volume is now intrinsic to each tier ({@link TIER_VOLUME_SCALE}), so there is no
- * per-design traffic multiplier to thread through — estimateCosts costs each tier at
- * its own stage (~1k → ~10k → ~100k requests/day).
+ * Traffic is its own axis now (reversed the tier-as-scale-ladder): estimateCosts
+ * costs all three tiers at ONE volume — the default band here, since curated designs
+ * carry no stored traffic answer — and tiers differ only by robustness. Re-running is
+ * deterministic and free (no LLM).
  *
  * Run (set DB_PATH to the gallery DB if not running from the repo root):
  *   pnpm --filter @drafture/api exec tsx scripts/recomputeCuratedCosts.ts

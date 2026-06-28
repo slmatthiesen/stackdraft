@@ -8,11 +8,13 @@
  * drivers. This is an order-of-magnitude estimate, never a quote.
  */
 
-import type { CostDriver, TierName } from "./types.js";
+import type { CostDriver } from "./types.js";
 import {
   ladderForDriver,
   driverKey,
   optionFor,
+  baseInstanceType,
+  INSTANCE_PRICES,
   type SizeId,
 } from "./sizeLadder.js";
 
@@ -98,24 +100,20 @@ export function formatCostBand(rollup: CostRollup): string | null {
 }
 
 /**
- * Assumed request volume each tier is costed at — MIRRORS the API's
- * `TIER_VOLUME_SCALE` (apps/api/src/pipeline/cost.ts), anchored at 10k/day for
- * balanced (×0.1 / ×1 / ×10). The cost bands are computed from the same scale
- * server-side, so these MUST move together — otherwise the "assumes ~X/day" label
- * misstates the volume behind the dollars.
+ * Default assumed request volume the displayed bands sit at — the <50k-visitor
+ * intake default (~10k requests/day ≈ 300k/month), matching the API's default
+ * volume scale. Traffic is its OWN axis now (reversed the per-tier scale ladder):
+ * the same volume across all three tiers, so this is a single constant, not a
+ * per-tier map. The precise level a live generation used is also stated in the
+ * result assumptions.
  */
-export const TIER_REQUESTS_PER_DAY: Record<TierName, number> = {
-  budget: 1_000,
-  balanced: 10_000,
-  resilient: 100_000,
-};
+export const ASSUMED_REQUESTS_PER_DAY = 10_000;
 
 const DAYS_PER_MONTH = 30;
 
-/** The tier's assumed request volume, per day and per (30-day) month. */
-export function assumedTraffic(tier: TierName): { perDay: number; perMonth: number } {
-  const perDay = TIER_REQUESTS_PER_DAY[tier];
-  return { perDay, perMonth: perDay * DAYS_PER_MONTH };
+/** The assumed request volume, per day and per (30-day) month — same for all tiers. */
+export function assumedTraffic(): { perDay: number; perMonth: number } {
+  return { perDay: ASSUMED_REQUESTS_PER_DAY, perMonth: ASSUMED_REQUESTS_PER_DAY * DAYS_PER_MONTH };
 }
 
 /** Compact request count: 1_000 → "1K", 300_000 → "300K", 3_000_000 → "3M". */
@@ -130,30 +128,33 @@ function trimZeros(n: number): string {
 }
 
 /**
- * Roughly the cost added per extra 10K requests/month AT THIS TIER — the slope of
- * the variable (traffic-driven) cost. Sums the spread (high − low) of the VARIABLE
- * drivers only (fixed always-on/storage drivers don't grow with requests), then
- * divides by the tier's monthly request-band width (= 90 × requests/day, i.e. the
- * 100k–1M base band scaled by this tier) and rescales to 10K. 0 when there's no
- * traffic-driven cost (a tier whose whole bill is always-on capacity).
+ * Roughly the cost added per extra 10K requests/month — the slope of the variable
+ * (traffic-driven) cost. Sums the spread (high − low) of the VARIABLE drivers only
+ * (fixed always-on/storage drivers don't grow with requests), then divides by the
+ * assumed monthly request-band width (= 90 × requests/day, the 100k–1M base band)
+ * and rescales to 10K. 0 when there's no traffic-driven cost (a bill that's all
+ * always-on capacity).
  */
-export function marginalPer10kRequests(drivers: CostDriver[], tier: TierName): number {
+export function marginalPer10kRequests(drivers: CostDriver[]): number {
   let variableSpread = 0;
   for (const d of drivers) {
     if (isFixedUnit(d.unit)) continue;
     const parsed = parseMonthlyRange(d.estimateRange);
     if (parsed) variableSpread += parsed.high - parsed.low;
   }
-  const monthlyBandWidth = 90 * TIER_REQUESTS_PER_DAY[tier];
+  const monthlyBandWidth = 90 * ASSUMED_REQUESTS_PER_DAY;
   if (monthlyBandWidth <= 0) return 0;
   return (variableSpread * 10_000) / monthlyBandWidth;
 }
 
 // --- Instance-size selection (GAP 1) -----------------------------------------
-// Re-scale a capacity driver's monthly range by the selected size's price RATIO,
-// so a user right-sizing EC2/RDS/… sees every downstream number update live. Pure
-// and non-mutating; returns the original driver object unchanged at medium
-// (ratio 1) so the showcased default band stays byte-identical to the seed output.
+// Re-price a capacity driver by the ABSOLUTE prices of the selected vs. the
+// server-priced instance class (price[picked] / price[server's class]) — NOT a
+// per-tier ratio. So a user right-sizing EC2/RDS/… sees every downstream number
+// update live, and the default (the server's class) is a no-op (ratio 1). Pure and
+// non-mutating. This is the two-sided half of the GAP-1 fix: the server prices the
+// architect's size, the client re-prices off the SAME table, so the two never
+// double-apply (the old bug: server price × a client 0.22 ratio).
 
 /** Format a USD endpoint like the API does (2–4 decimals by magnitude). */
 export function formatUsd(n: number): string {
@@ -172,9 +173,10 @@ export function formatRange(lowUsd: number, highUsd: number): string {
 
 /**
  * Apply per-service size selections to a tier's cost drivers. Non-adjustable
- * drivers pass through unchanged; adjustable ones have their parsed low/high
- * multiplied by the selected size's ratio and re-stringified. Medium (ratio 1)
- * is a no-op that returns the original driver, preserving the seed's exact range.
+ * drivers, and adjustable ones with NO explicit selection, pass through unchanged —
+ * the server's price stands (no auto-seeded ratio). An explicit selection re-prices
+ * the parsed low/high by `price[picked] / price[server's class]`; picking the size
+ * the server already used is a no-op (ratio 1), preserving the exact server range.
  */
 export function applySizeSelection(
   drivers: CostDriver[],
@@ -183,9 +185,14 @@ export function applySizeSelection(
   return drivers.map((d) => {
     const ladder = ladderForDriver(d);
     if (!ladder) return d;
+    const sel = selection[driverKey(d)];
+    if (sel === undefined) return d; // no explicit override → keep the server price
     const parsed = parseMonthlyRange(d.estimateRange);
     if (!parsed) return d;
-    const ratio = optionFor(ladder, selection[driverKey(d)]).ratio;
+    const basePrice = INSTANCE_PRICES[baseInstanceType(d, ladder)];
+    const pickedPrice = INSTANCE_PRICES[optionFor(ladder, sel).instanceType];
+    if (!basePrice || !pickedPrice) return d;
+    const ratio = pickedPrice / basePrice;
     if (ratio === 1) return d;
     return {
       ...d,

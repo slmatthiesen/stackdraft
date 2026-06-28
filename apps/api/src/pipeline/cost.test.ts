@@ -12,12 +12,14 @@ import {
   estimateCosts,
   formatRange,
   onDemandDisclaimer,
+  trafficVolumeScale,
   ASSUMED_MONTHLY_VOLUME,
   TIER_COST_MULTIPLIER,
-  TIER_VOLUME_SCALE,
 } from "./cost.js";
+import instancePrices from "@drafture/kb/instance-prices.seed.json" with { type: "json" };
 
 const REGION = "us-east-1";
+const PRICE = (t: string): number => (instancePrices as { prices: Record<string, number> }).prices[t]!;
 
 function node(awsService: string, over: Partial<ArchitectureNode> = {}): ArchitectureNode {
   return {
@@ -357,11 +359,11 @@ describe("estimateCosts", () => {
     expect(drivers.some((d) => d.service === "API Gateway WebSocket" && d.unit === "per 1k requests")).toBe(true);
   });
 
-  it("scales a REQUEST line by volume only across tiers — NOT the robustness multiplier", () => {
-    // A request-priced line (per-1k-requests) scales across tiers via the volume stage
-    // (0.1×/1×/10×) ONLY. The robustness multiplier must NOT apply on top: sending a
-    // request doesn't cost 3× more because the tier is multi-region — that double-count
-    // is what made a resilient SES line read $300–$3000/mo (30×) instead of 10×.
+  it("prices a REQUEST line IDENTICALLY across tiers — traffic is shared, robustness doesn't touch requests", () => {
+    // Traffic is its own axis now (reversed the tier-as-scale-ladder): all three tiers
+    // are costed at the SAME volume, so a request-priced line is identical across them.
+    // The robustness multiplier must NOT apply on top (that double-count made a
+    // resilient SES line read 30× instead of the shared volume).
     const sameNodes = [node("API Gateway")];
     const ladder: ArchitectureResult = {
       assumptions: [],
@@ -376,13 +378,33 @@ describe("estimateCosts", () => {
     };
     const price = stores.pricing.get("API Gateway", REGION).find((r) => r.unit === "per-1k-requests")!;
     const band = ASSUMED_MONTHLY_VOLUME["per-1k-requests"]!;
-    const out = estimateCosts(ladder, stores.pricing, REGION);
+    const out = estimateCosts(ladder, stores.pricing, REGION); // default <50k band → volumeScale 1
     const reqRange = (t: Tier): string =>
       t.costDrivers.find((d) => d.service === "API Gateway" && d.unit === "per 1k requests")!.estimateRange;
-    for (const t of out.tiers as Tier[]) {
-      const vol = TIER_VOLUME_SCALE[t.name];
-      expect(reqRange(t)).toBe(formatRange(price.usd * band.low * vol, price.usd * band.high * vol));
-    }
+    const expected = formatRange(price.usd * band.low, price.usd * band.high);
+    for (const t of out.tiers as Tier[]) expect(reqRange(t)).toBe(expected);
+  });
+
+  it("scales the SHARED request volume by the traffic answer (its own axis), same across tiers", () => {
+    const sameNodes = [node("API Gateway")];
+    const ladder: ArchitectureResult = {
+      assumptions: [],
+      clarificationsUsed: [],
+      securityFloor: SECURITY_FLOOR,
+      ...RECOMMENDATION,
+      tiers: [
+        tier("budget", sameNodes, ["baseline"]),
+        tier("balanced", sameNodes, ["+ multi-AZ"]),
+        tier("resilient", sameNodes, ["+ cross-region"]),
+      ],
+    };
+    const price = stores.pricing.get("API Gateway", REGION).find((r) => r.unit === "per-1k-requests")!;
+    const band = ASSUMED_MONTHLY_VOLUME["per-1k-requests"]!;
+    const out = estimateCosts(ladder, stores.pricing, REGION, 10); // <500k band
+    const reqRange = (t: Tier): string =>
+      t.costDrivers.find((d) => d.service === "API Gateway" && d.unit === "per 1k requests")!.estimateRange;
+    const expected = formatRange(price.usd * band.low * 10, price.usd * band.high * 10);
+    for (const t of out.tiers as Tier[]) expect(reqRange(t)).toBe(expected);
   });
 
   it("scales a CAPACITY line by the robustness multiplier across tiers — NOT volume", () => {
@@ -496,5 +518,107 @@ describe("normalizeService keyword fallback (GAP 3)", () => {
   it("does NOT price a Fargate-compatible EC2 task as Fargate", () => {
     const priced = driversFor("ECS Task (Fargate-compatible definition)");
     expect(priced).not.toContain("Fargate");
+  });
+});
+
+describe("instance sizing (Fix 1 — honor architect's size, else tier default)", () => {
+  let stores: Stores;
+  beforeEach(() => {
+    stores = createStores(openTempDb());
+    seedKnowledgeBase(stores);
+  });
+
+  const one = (name: Tier["name"], n: ArchitectureNode): ArchitectureResult => ({
+    assumptions: [],
+    clarificationsUsed: [],
+    securityFloor: SECURITY_FLOOR,
+    ...RECOMMENDATION,
+    tiers: [tier(name, [n], ["baseline"])],
+  });
+
+  const ec2Hour = (out: ArchitectureResult): { estimateRange: string; instanceType?: string } =>
+    out.tiers[0]!.costDrivers.find((d) => d.service === "EC2" && d.unit === "$/hr")!;
+
+  it("THE MISSING INVARIANT: priced size MATCHES the size the architect stated (t4g.small, not m5.large $70)", () => {
+    // The self-host bug: node says "API host (t4g.small)" but the engine billed m5.large.
+    const out = estimateCosts(one("balanced", node("EC2", { role: "API host (t4g.small)" })), stores.pricing, REGION);
+    const ec2 = ec2Hour(out);
+    expect(ec2.instanceType).toBe("t4g.small");
+    const band = ASSUMED_MONTHLY_VOLUME["hour"]!;
+    const mult = TIER_COST_MULTIPLIER.balanced;
+    expect(ec2.estimateRange).toBe(formatRange(PRICE("t4g.small") * band.low * mult, PRICE("t4g.small") * band.high * mult));
+  });
+
+  it("parses a db.* class for a relational store (db.r6g.large), not the default", () => {
+    const out = estimateCosts(one("balanced", node("RDS", { role: "Postgres (db.r6g.large)" })), stores.pricing, REGION);
+    const rds = out.tiers[0]!.costDrivers.find((d) => d.service === "RDS" && d.unit === "$/hr")!;
+    expect(rds.instanceType).toBe("db.r6g.large");
+  });
+
+  it("falls back to the TIER DEFAULT when the architect states no size — budget→small (never m5.large)", () => {
+    const out = estimateCosts(one("budget", node("EC2")), stores.pricing, REGION); // bare "EC2"
+    const ec2 = ec2Hour(out);
+    expect(ec2.instanceType).toBe("t4g.small"); // budget default, NOT m5.large
+    expect(ec2.instanceType).not.toBe("m5.large");
+  });
+
+  it("THE CHEAP PATH (GAP-1 closed): a budget EC2 box prices ~$12/mo, not ~$70 (m5.large)", () => {
+    const out = estimateCosts(one("budget", node("EC2")), stores.pricing, REGION);
+    const ec2 = ec2Hour(out);
+    const low = Number(/\$([\d.]+)–/.exec(ec2.estimateRange)![1]);
+    expect(low).toBeGreaterThan(10);
+    expect(low).toBeLessThan(20); // ~$12.26 (t4g.small × 730 hr), nowhere near $70
+  });
+
+  it("the tier DEFAULT ladders by tier (budget small < balanced < resilient large) when no size stated", () => {
+    const lowOf = (name: Tier["name"]): number => {
+      const out = estimateCosts(one(name, node("EC2")), stores.pricing, REGION);
+      return Number(/\$([\d.]+)–/.exec(ec2Hour(out).estimateRange)![1]);
+    };
+    expect(lowOf("budget")).toBeLessThan(lowOf("balanced"));
+    expect(lowOf("balanced")).toBeLessThan(lowOf("resilient"));
+  });
+
+  it("DOUBLE-APPLY GUARD: stamps instanceType on the instance line so the client re-prices off the same table (not a tier ratio); non-instance $/hr lines carry none", () => {
+    const out = estimateCosts(
+      { ...one("balanced", node("EC2", { role: "API host (t4g.small)" })) },
+      stores.pricing,
+      REGION,
+    );
+    const ec2 = ec2Hour(out);
+    expect(ec2.instanceType).toBe("t4g.small"); // server tells the client what it priced
+    // ALB / NAT $/hr are not sized instances → no instanceType (client must not resize them).
+    const albOut = estimateCosts(one("balanced", node("ALB")), stores.pricing, REGION);
+    const alb = albOut.tiers[0]!.costDrivers.find((d) => d.service === "ALB" && d.unit === "$/hr")!;
+    expect(alb.instanceType).toBeUndefined();
+  });
+});
+
+describe("traffic as its own axis (Problem 2)", () => {
+  it("trafficVolumeScale parses the intake answer; absent/empty → the sensible default band", () => {
+    expect(trafficVolumeScale(["Expected monthly visitors: < 1k"])).toBe(0.1);
+    expect(trafficVolumeScale(["Expected monthly visitors: < 50k"])).toBe(1);
+    expect(trafficVolumeScale(["Expected monthly visitors: < 500k"])).toBe(10);
+    expect(trafficVolumeScale(["Expected monthly visitors: Millions"])).toBe(100);
+    expect(trafficVolumeScale(["Downtime tolerance: Mission-critical"])).toBe(1); // unrelated answer
+    expect(trafficVolumeScale([])).toBe(1);
+    expect(trafficVolumeScale(undefined)).toBe(1);
+  });
+
+  it("states the assumed traffic in assumptions so a skipped traffic question stays honest", () => {
+    const stores = createStores(openTempDb());
+    seedKnowledgeBase(stores);
+    const out = estimateCosts(
+      {
+        assumptions: [],
+        clarificationsUsed: [],
+        securityFloor: SECURITY_FLOOR,
+        ...RECOMMENDATION,
+        tiers: [tier("balanced", [node("Lambda")], ["baseline"])],
+      },
+      stores.pricing,
+      REGION,
+    );
+    expect(out.assumptions.some((a) => /assumed traffic/i.test(a))).toBe(true);
   });
 });

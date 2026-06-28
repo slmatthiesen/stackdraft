@@ -22,7 +22,8 @@
  * NAT processed + hourly) is a first-class unit.
  */
 import pricingFacts from "@drafture/kb/pricing-facts.seed.json" with { type: "json" };
-import type { PricingFact } from "@drafture/kb";
+import instancePricesSeed from "@drafture/kb/instance-prices.seed.json" with { type: "json" };
+import type { PricingFact, InstancePriceTable } from "@drafture/kb";
 
 import type {
   ArchitectureBeforeCost,
@@ -54,22 +55,103 @@ export const TIER_COST_MULTIPLIER: Record<TierName, number> = {
 };
 
 /**
- * Per-tier VOLUME stage — the scale each tier is costed AT, orthogonal to the
- * robustness premium above. The three tiers are a growth ladder, not three
- * robustness variants of one fixed load: each is a 10× step in request volume,
- * centered (band geometric mean) on roughly 1k / 10k / 100k requests PER DAY for
- * budget / balanced / resilient. This deliberately targets the 80/20 of real
- * workloads — most apps live in the 1k–100k/day range — rather than a millions/day
- * outlier. The user picks a tier and is shown that scale's bill, deterministically,
- * with no intake volume knob in the loop. Applied to the assumed monthly-volume
- * bands, then the robustness multiplier layers on top (resilient ≈ 10× volume ×
- * 3× robustness).
+ * TRAFFIC IS ITS OWN AXIS (reversed the old tier-as-scale-ladder). Volume is no
+ * longer intrinsic to the tier: the customer states EXPECTED TRAFFIC once (intake
+ * "expected monthly visitors"), that drives ONE volume scale, and the SAME scale is
+ * applied to all three tiers. Tiers then differ ONLY by robustness
+ * ({@link TIER_COST_MULTIPLIER}) — they are single-AZ → multi-AZ → multi-region
+ * variants of ONE workload, not three different-sized apps. This removes a concept:
+ * there is no per-tier volume stage anymore, so a budget box is never silently
+ * priced for a traffic level the user never specified.
+ *
+ * The four bands are 10× steps; the default (<50k/mo, ≈ the old "balanced" centre)
+ * keeps a fresh estimate where the showcased numbers used to sit.
  */
-export const TIER_VOLUME_SCALE: Record<TierName, number> = {
-  budget: 0.1, // ~1k requests/day
-  balanced: 1, // ~10k requests/day (the showcased default)
-  resilient: 10, // ~100k requests/day
+export const TRAFFIC_VOLUME_SCALE: Record<string, number> = {
+  "<1k": 0.1,
+  "<50k": 1,
+  "<500k": 10,
+  millions: 100,
 };
+
+/** Assumed band when the user skips the traffic question (skippable-intake UX). */
+export const DEFAULT_TRAFFIC_BAND = "<50k";
+
+/**
+ * Parse the intake "expected monthly visitors" answer into a volume scale. The
+ * customer states TRAFFIC only (never capacity); absent or unrecognized → the
+ * sensible default band. Keyword-matched (most-specific first) so phrasing drift
+ * ("< 500k", "500,000", "Millions a month") still resolves.
+ */
+export function trafficVolumeScale(answers: readonly string[] | undefined): number {
+  const text = (answers ?? []).join(" \n ").toLowerCase();
+  const fallback = TRAFFIC_VOLUME_SCALE[DEFAULT_TRAFFIC_BAND]!;
+  if (!/expected monthly visitors/.test(text)) return fallback;
+  if (/\bmillions?\b/.test(text)) return TRAFFIC_VOLUME_SCALE.millions!;
+  if (/500\s*k|500,?000/.test(text)) return TRAFFIC_VOLUME_SCALE["<500k"]!;
+  if (/50\s*k|50,?000/.test(text)) return TRAFFIC_VOLUME_SCALE["<50k"]!;
+  if (/\b1\s*k\b|\b1,?000\b/.test(text)) return TRAFFIC_VOLUME_SCALE["<1k"]!;
+  return fallback;
+}
+
+// --- Instance sizing (honor the architect's stated size, else a tier default) ----
+//
+// Capacity ($/hr) services that ARE a sized instance (EC2/RDS/Aurora/ElastiCache/
+// OpenSearch) used to price at ONE fixed seed $/hr — e.g. EC2 = m5.large $70/mo —
+// so a t4g.small the architect explicitly chose was billed as an m5.large. We now
+// resolve the instance class: PARSE it from the node text when the architect stated
+// one, else fall back to a per-tier default (budget→small … resilient→large, NEVER
+// large-always), and price it from the shared {@link INSTANCE_PRICES} table. The
+// driver is stamped with the resolved `instanceType` so the client size-ladder
+// re-prices against the SAME absolute table (no ratio guessing → no double-apply).
+const INSTANCE_PRICES: Record<string, number> = (instancePricesSeed as InstancePriceTable).prices;
+
+interface InstanceFamily {
+  /** Matches an explicit instance class the architect stated in the node text. */
+  parse: RegExp;
+  /** Fallback size when none stated — laddered by tier (robustness headroom). */
+  defaults: Record<TierName, string>;
+}
+
+/** Canonical-service → instance family. Keyed to the names {@link normalizeService}
+ *  produces. Fargate/ALB/NAT are NOT here (no instance class — they keep their seed
+ *  $/hr). db.* prices are shared by RDS + Aurora. */
+const INSTANCE_FAMILIES: Record<string, InstanceFamily> = {
+  EC2: {
+    parse: /(?<![\w.])(?!db\.|cache\.)[a-z]+\d[a-z]*\.(?:nano|micro|small|medium|large|\d*xlarge)\b(?!\.search)/i,
+    defaults: { budget: "t4g.small", balanced: "t4g.large", resilient: "m7g.large" },
+  },
+  RDS: {
+    parse: /\bdb\.[a-z]+\d[a-z]*\.(?:nano|micro|small|medium|large|\d*xlarge)\b/i,
+    defaults: { budget: "db.t4g.small", balanced: "db.t4g.large", resilient: "db.r6g.large" },
+  },
+  Aurora: {
+    parse: /\bdb\.[a-z]+\d[a-z]*\.(?:nano|micro|small|medium|large|\d*xlarge)\b/i,
+    defaults: { budget: "db.t4g.medium", balanced: "db.r6g.large", resilient: "db.r6g.xlarge" },
+  },
+  ElastiCache: {
+    parse: /\bcache\.[a-z]+\d[a-z]*\.(?:nano|micro|small|medium|large|\d*xlarge)\b/i,
+    defaults: { budget: "cache.t4g.small", balanced: "cache.t4g.medium", resilient: "cache.r6g.large" },
+  },
+  OpenSearch: {
+    parse: /\b[a-z]+\d[a-z]*\.(?:small|medium|large|\d*xlarge)\.search\b/i,
+    defaults: { budget: "t3.small.search", balanced: "m6g.large.search", resilient: "r6g.large.search" },
+  },
+};
+
+/** Resolve the instance class for an instance-backed $/hr service: the architect's
+ *  stated class if it's in the price table, else the tier default. `undefined` for
+ *  non-instance services (they keep their seed $/hr). */
+function resolveInstanceType(service: string, nodeText: string, tierName: TierName): string | undefined {
+  const family = INSTANCE_FAMILIES[service];
+  if (!family) return undefined;
+  const m = family.parse.exec(nodeText);
+  if (m) {
+    const stated = m[0].toLowerCase();
+    if (INSTANCE_PRICES[stated] !== undefined) return stated;
+  }
+  return family.defaults[tierName];
+}
 
 /** Assumed MONTHLY consumption per native unit for REQUEST / CAPACITY / STORAGE
  *  units — the count of native units consumed per month (low → high). Exported so
@@ -114,9 +196,10 @@ const DEFAULT_BAND: VolumeBand = { low: 1, high: 10 };
 
 /**
  * Baseline monthly REQUEST volume (the same 100k–1M/mo the request-priced bands
- * encode), scaled by the tier's volume stage ({@link TIER_VOLUME_SCALE}). The driver for payload-
- * proportional traffic units so transfer/logs grow with request count ONCE,
- * instead of via a fixed band × the request multiplier (the old double-count).
+ * encode), scaled by the traffic-driven volume scale ({@link trafficVolumeScale}).
+ * The driver for payload-proportional traffic units so transfer/logs grow with
+ * request count ONCE, instead of via a fixed band × the request multiplier (the old
+ * double-count).
  */
 export const REQUESTS_PER_MONTH_BASE: VolumeBand = { low: 100_000, high: 1_000_000 };
 
@@ -352,6 +435,7 @@ function driversForService(
   isPrivateSubnetDefault: boolean,
   tierMultiplier: number,
   volumeScale: number,
+  instanceType?: string,
 ): CostDriver[] {
   const { records, approximate } = lookupPrices(service, region, pricing);
   return records.map((r) => {
@@ -364,13 +448,21 @@ function driversForService(
     // units don't scale by volume, so tierMultiplier is the only thing that moves
     // them across tiers; keep it there. Monotonicity holds either way (request lines
     // rise via volumeScale, capacity lines via tierMultiplier).
+    // Instance-backed $/hr line: price the RESOLVED instance class from the shared
+    // table instead of the single seed $/hr (the m5.large-always bug). The robustness
+    // multiplier still layers on top (multi-AZ duplicates the box).
+    const isInstanceHour =
+      r.unit === "hour" && instanceType !== undefined && INSTANCE_PRICES[instanceType] !== undefined;
+    const usd = isInstanceHour ? INSTANCE_PRICES[instanceType!]! : r.usd;
     const band = monthlyBand(r.unit, volumeScale);
     const effectiveMultiplier = CAPACITY_UNITS.has(r.unit) ? tierMultiplier : 1;
     const estimateRange = formatRange(
-      r.usd * band.low * effectiveMultiplier,
-      r.usd * band.high * effectiveMultiplier,
+      usd * band.low * effectiveMultiplier,
+      usd * band.high * effectiveMultiplier,
     );
-    let note = r.note;
+    let note = isInstanceHour
+      ? `Assumed-throughput estimate: ${instanceType} on-demand (us-east-1). Cost = instance count × running hours; storage/IO billed separately, multi-AZ via the tier multiplier.`
+      : r.note;
     if (isPrivateSubnetDefault) {
       note =
         `Required by the private-subnet security default (no public data tier) ` +
@@ -379,7 +471,9 @@ function driversForService(
     if (approximate) {
       note = `Approximate (no cached price for ${service}; using offline seed fallback). ${note}`;
     }
-    return { service: r.service, unit: unitLabel(r.unit), estimateRange, note };
+    const driver: CostDriver = { service: r.service, unit: unitLabel(r.unit), estimateRange, note };
+    if (isInstanceHour) driver.instanceType = instanceType;
+    return driver;
   });
 }
 
@@ -453,7 +547,12 @@ function egressesFromPrivateSubnet(tier: GeneratedTier): boolean {
   });
 }
 
-function estimateTier(tier: GeneratedTier, pricing: PricingStore, region: string): Tier {
+function estimateTier(
+  tier: GeneratedTier,
+  pricing: PricingStore,
+  region: string,
+  volumeScale: number,
+): Tier {
   const drivers: CostDriver[] = [];
   const seen = new Set<string>();
   const add = (d: CostDriver): void => {
@@ -464,12 +563,23 @@ function estimateTier(tier: GeneratedTier, pricing: PricingStore, region: string
   };
 
   const tierMultiplier = TIER_COST_MULTIPLIER[tier.name];
-  // The scale this tier is costed at — budget launch-scale → resilient millions.
-  const volumeScale = TIER_VOLUME_SCALE[tier.name];
 
-  const services = uniqueOrdered(tier.nodes.flatMap((n) => splitServices(n.awsService).map(normalizeService)));
-  for (const service of services) {
-    for (const d of driversForService(service, region, pricing, false, tierMultiplier, volumeScale)) add(d);
+  // Map each normalized service to the node text it came from (awsService + role),
+  // first-seen order preserved, so an instance-backed service can read the architect's
+  // stated instance class out of its own node prose.
+  const serviceText = new Map<string, string>();
+  for (const n of tier.nodes) {
+    for (const raw of splitServices(n.awsService)) {
+      const svc = normalizeService(raw);
+      serviceText.set(svc, `${serviceText.get(svc) ?? ""} ${raw} ${n.role}`);
+    }
+  }
+
+  for (const [service, text] of serviceText) {
+    const instanceType = resolveInstanceType(service, text, tier.name);
+    for (const d of driversForService(service, region, pricing, false, tierMultiplier, volumeScale, instanceType)) {
+      add(d);
+    }
   }
 
   // Surface the recurring NAT/egress cost a VPC-bound tier imposes, even though no
@@ -484,17 +594,6 @@ function estimateTier(tier: GeneratedTier, pricing: PricingStore, region: string
   return { ...tier, costDrivers: drivers };
 }
 
-function uniqueOrdered(items: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const item of items) {
-    if (seen.has(item)) continue;
-    seen.add(item);
-    out.push(item);
-  }
-  return out;
-}
-
 /**
  * Fill every tier's cost drivers deterministically from the cached PricingStore,
  * adding the private-subnet NAT/egress line where required and attaching the
@@ -505,11 +604,32 @@ export function estimateCosts(
   result: ArchitectureBeforeCost,
   pricing: PricingStore,
   region: string,
+  volumeScale: number = TRAFFIC_VOLUME_SCALE[DEFAULT_TRAFFIC_BAND]!,
 ): ArchitectureResult {
-  const tiers = result.tiers.map((tier) => estimateTier(tier, pricing, region));
-  const disclaimer = onDemandDisclaimer(region);
-  const assumptions = result.assumptions.includes(disclaimer)
-    ? result.assumptions
-    : [...result.assumptions, disclaimer];
+  const tiers = result.tiers.map((tier) => estimateTier(tier, pricing, region, volumeScale));
+  // Disclaimer + the assumed traffic (now its own axis, shared across tiers) — stated
+  // so a skipped traffic question still leaves the costing assumption visible. Both are
+  // idempotent (re-running estimateCosts never duplicates them).
+  const extras = [onDemandDisclaimer(region), trafficAssumption(volumeScale)].filter(
+    (a) => !result.assumptions.includes(a),
+  );
+  const assumptions = extras.length > 0 ? [...result.assumptions, ...extras] : result.assumptions;
   return { ...result, assumptions, tiers };
+}
+
+/** Compact request count for assumption prose: 300000 → "300k", 1000000 → "1M". */
+function compactCount(n: number): string {
+  if (n >= 1_000_000) return `${+(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${+(n / 1_000).toFixed(0)}k`;
+  return String(Math.round(n));
+}
+
+/** The traffic the cost bands assume, stated for the user (skippable-intake UX). */
+export function trafficAssumption(volumeScale: number): string {
+  const low = compactCount(REQUESTS_PER_MONTH_BASE.low * volumeScale);
+  const high = compactCount(REQUESTS_PER_MONTH_BASE.high * volumeScale);
+  return (
+    `Assumed traffic ~${low}–${high} requests/month, applied equally to all three tiers ` +
+    `(tiers differ by robustness, not traffic). Set "expected monthly visitors" in intake to change it.`
+  );
 }
