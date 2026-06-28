@@ -52,8 +52,6 @@ function validArchitecture(): GeneratedArchitecture {
     assumptions: ["single region us-east-1"],
     clarificationsUsed: [],
     tiers: TIER_NAMES.map(makeTier),
-    recommendedTier: "balanced",
-    recommendationRationale: "Balanced fits moderate, bursty traffic with multi-AZ availability.",
     keyDecisions: [
       {
         decision: "Compute model",
@@ -115,7 +113,7 @@ describe("generateArchitecture", () => {
 
     // generateArchitecture returns the GENERATED shape (no costDrivers); estimateCosts
     // fills them like the route/seed do, so parse the FULL result after the cost step.
-    const estimated = estimateCosts(result, stores.pricing, "us-east-1", 1);
+    const estimated = estimateCosts(result, stores.pricing, "us-east-1");
     expect(() => ArchitectureResultSchema.parse(estimated)).not.toThrow();
     expect(result.tiers.map((t) => t.name)).toEqual(["budget", "balanced", "resilient"]);
     expect(usage).toEqual(USAGE);

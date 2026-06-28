@@ -71,7 +71,7 @@ export async function runEval(input: RunEvalInput): Promise<EvalReport> {
     // Run the deterministic cost step so the result mirrors what the route/seed
     // produce: the model emits no costDrivers, so estimateCosts fills them and
     // appends the on-demand list-price disclaimer the property gate checks.
-    const estimated = estimateCosts(result, input.pricing, input.region ?? "us-east-1", 1);
+    const estimated = estimateCosts(result, input.pricing, input.region ?? "us-east-1");
     const aggregate = check(estimated);
     perPrompt.push({ id: prompt.id, ok: aggregate.ok, properties: aggregate.results });
   }
