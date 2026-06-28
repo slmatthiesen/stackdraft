@@ -9,15 +9,21 @@
  */
 
 import type { CostDriver } from "../lib/types.js";
+import { driverKey, ladderForDriver, type SizeId } from "../lib/sizeLadder.js";
+import { SizeSelector } from "./SizeSelector.js";
 
 /** The FULL cost-driver table. Rendered inside the collapsible CostEstimate's
  *  "show all" panel (and standalone in tests). */
 export function CostTable({
   drivers,
   assumptions,
+  sizeSelection,
+  onSizeChange,
 }: {
   drivers: CostDriver[];
   assumptions: string[];
+  sizeSelection?: Record<string, SizeId>;
+  onSizeChange?: (driverKey: string, size: SizeId) => void;
 }): JSX.Element {
   return (
     <div className="cost__full">
@@ -31,14 +37,28 @@ export function CostTable({
           </tr>
         </thead>
         <tbody>
-          {drivers.map((d, i) => (
-            <tr key={`${d.service}-${i}`}>
-              <td>{d.service}</td>
-              <td className="cost__unit">{d.unit}</td>
-              <td className="cost__range">{d.estimateRange}</td>
-              <td className="cost__note">{d.note}</td>
-            </tr>
-          ))}
+          {drivers.map((d) => {
+            const ladder = ladderForDriver(d);
+            const key = driverKey(d);
+            return (
+              <tr key={key}>
+                <td>
+                  {d.service}
+                  {ladder && onSizeChange && sizeSelection && (
+                    <SizeSelector
+                      ladder={ladder}
+                      selectedId={sizeSelection[key] ?? ladder.defaultId}
+                      ariaLabel={d.service}
+                      onSelect={(id) => onSizeChange(key, id)}
+                    />
+                  )}
+                </td>
+                <td className="cost__unit">{d.unit}</td>
+                <td className="cost__range">{d.estimateRange}</td>
+                <td className="cost__note">{d.note}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {assumptions.length > 0 && (

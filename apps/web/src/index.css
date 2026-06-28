@@ -1246,6 +1246,52 @@ body {
   margin-top: 0.75rem;
 }
 
+/* Instance-size segmented control (S/M/L) shown beside adjustable capacity
+   services. Joined segments share an outer border; the active one fills --ink. */
+.size-selector {
+  display: inline-flex;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.size-selector__chip {
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
+  border: none;
+  border-right: 1px solid var(--card-border);
+  padding: 0.3rem 0.5rem;
+  min-width: 1.5rem;
+  transition: background 0.1s ease;
+}
+
+.size-selector__chip:last-child {
+  border-right: none;
+}
+
+.size-selector__chip:hover {
+  background: var(--paper-deep);
+}
+
+.size-selector__chip:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+  position: relative;
+  z-index: 1;
+}
+
+.size-selector__chip--active {
+  background: var(--ink);
+  color: #fff;
+}
+
 /* ---- diagram ---- */
 
 .diagram {

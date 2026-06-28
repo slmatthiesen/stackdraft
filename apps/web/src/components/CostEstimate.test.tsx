@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { CostEstimate } from "./CostEstimate.js";
 import type { CostDriver } from "../lib/types.js";
 
@@ -32,5 +32,30 @@ describe("CostEstimate", () => {
     render(<CostEstimate drivers={[]} assumptions={[]} />);
     expect(screen.getByText("Cost estimate")).toBeInTheDocument();
     expect(screen.queryByText(/show all/i)).not.toBeInTheDocument();
+  });
+
+  it("shows an S/M/L selector for adjustable services and fires onSizeChange", () => {
+    const onSizeChange = vi.fn();
+    render(
+      <CostEstimate
+        drivers={drivers}
+        assumptions={assumptions}
+        sizeSelection={{ "RDS|$/hr": "m" }}
+        onSizeChange={onSizeChange}
+      />,
+    );
+
+    // RDS is in the ladder → its selector renders.
+    const rdsGroups = screen.getAllByRole("radiogroup", { name: "RDS instance size" });
+    expect(rdsGroups.length).toBeGreaterThanOrEqual(1);
+
+    // NAT Gateway is $/hr but NOT in the ladder → no selector.
+    expect(
+      screen.queryByRole("radiogroup", { name: "NAT Gateway instance size" }),
+    ).toBeNull();
+
+    // Picking "L" reports the driver key + size to the parent.
+    fireEvent.click(within(rdsGroups[0]!).getByRole("radio", { name: "L" }));
+    expect(onSizeChange).toHaveBeenCalledWith("RDS|$/hr", "l");
   });
 });

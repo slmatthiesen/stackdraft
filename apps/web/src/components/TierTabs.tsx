@@ -7,8 +7,16 @@
  * never security-relaxed.
  */
 
+import { useMemo, useState } from "react";
 import type { Tier, TierName } from "../lib/types.js";
 import { graphToMermaid } from "../lib/mermaid.js";
+import { applySizeSelection } from "../lib/cost.js";
+import {
+  defaultSizeFor,
+  driverKey,
+  ladderForDriver,
+  type SizeId,
+} from "../lib/sizeLadder.js";
 import { DiagramView } from "./DiagramView.js";
 import { CostEstimate } from "./CostEstimate.js";
 import { CostSummary } from "./CostSummary.js";
@@ -37,6 +45,37 @@ export function TierTabs({
   onSelect: (name: TierName) => void;
 }): JSX.Element {
   const tier = tiers.find((t) => t.name === selected) ?? tiers[0];
+
+  // Per-tier instance-size overrides. Defaults vary by tier (Budget→small,
+  // Balanced→medium, Resilient→large) so a fresh Budget estimate already shows a
+  // cheap box; user tweaks persist per tier (and seed with no first-paint flash).
+  // `scaledDrivers` is what the cost views render, so every price tracks the
+  // selected sizes live — pure client-side, no API call.
+  const [sizeByTier, setSizeByTier] = useState<
+    Partial<Record<TierName, Record<string, SizeId>>>
+  >({});
+
+  const sizeSelection = useMemo<Record<string, SizeId>>(() => {
+    if (!tier) return {};
+    const seeded: Record<string, SizeId> = {};
+    for (const d of tier.costDrivers) {
+      if (ladderForDriver(d)) seeded[driverKey(d)] = defaultSizeFor(tier.name);
+    }
+    return { ...seeded, ...(sizeByTier[tier.name] ?? {}) };
+  }, [tier, sizeByTier]);
+
+  const scaledDrivers = useMemo(
+    () => (tier ? applySizeSelection(tier.costDrivers, sizeSelection) : []),
+    [tier, sizeSelection],
+  );
+
+  const handleSizeChange = (key: string, id: SizeId): void => {
+    if (!tier) return;
+    setSizeByTier((prev) => ({
+      ...prev,
+      [tier.name]: { ...(prev[tier.name] ?? {}), [key]: id },
+    }));
+  };
 
   if (!tier) return <p>No tiers to display.</p>;
 
@@ -69,7 +108,7 @@ export function TierTabs({
             )}
           </h2>
           <p className="tier__summary">{tier.summary}</p>
-          <CostSummary drivers={tier.costDrivers} tierName={tier.name} />
+          <CostSummary drivers={scaledDrivers} tierName={tier.name} />
           {tier.name === "budget" && (
             <p className="tier__safe-note">
               Lowest cost that still keeps the full security floor — never a security-relaxed option.
@@ -110,7 +149,12 @@ export function TierTabs({
             keeps it from sprawling wide off the right of the screen. */}
         <DiagramView chart={graphToMermaid(tier.nodes, tier.edges, "TB")} />
 
-        <CostEstimate drivers={tier.costDrivers} assumptions={assumptions} />
+        <CostEstimate
+          drivers={scaledDrivers}
+          assumptions={assumptions}
+          sizeSelection={sizeSelection}
+          onSizeChange={handleSizeChange}
+        />
       </section>
     </div>
   );

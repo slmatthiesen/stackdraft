@@ -10,8 +10,10 @@
 
 import type { CostDriver } from "../lib/types.js";
 import { rollupCost, formatCostBand, parseMonthlyRange } from "../lib/cost.js";
+import { driverKey, ladderForDriver, type SizeId } from "../lib/sizeLadder.js";
 import { CostTable } from "./CostTable.js";
 import { GlossaryText } from "./GlossaryText.js";
+import { SizeSelector } from "./SizeSelector.js";
 
 const TOP_N = 3;
 
@@ -27,9 +29,13 @@ function topDrivers(drivers: CostDriver[]): CostDriver[] {
 export function CostEstimate({
   drivers,
   assumptions,
+  sizeSelection,
+  onSizeChange,
 }: {
   drivers: CostDriver[];
   assumptions: string[];
+  sizeSelection?: Record<string, SizeId>;
+  onSizeChange?: (driverKey: string, size: SizeId) => void;
 }): JSX.Element {
   const band = formatCostBand(rollupCost(drivers));
   const top = topDrivers(drivers);
@@ -43,25 +49,42 @@ export function CostEstimate({
 
       {top.length > 0 && (
         <ul className="cost__top" aria-label="Top cost drivers">
-          {top.map((d, i) => (
-            <li key={i} className="cost__top-row">
-              <span className="cost__top-svc">{d.service}</span>
-              <span className="cost__top-range">{d.estimateRange}</span>
-              {d.note && (
-                <span className="cost__top-note">
-                  {" — "}
-                  <GlossaryText>{d.note}</GlossaryText>
-                </span>
-              )}
-            </li>
-          ))}
+          {top.map((d) => {
+            const ladder = ladderForDriver(d);
+            const key = driverKey(d);
+            return (
+              <li key={key} className="cost__top-row">
+                <span className="cost__top-svc">{d.service}</span>
+                {ladder && onSizeChange && sizeSelection && (
+                  <SizeSelector
+                    ladder={ladder}
+                    selectedId={sizeSelection[key] ?? ladder.defaultId}
+                    ariaLabel={d.service}
+                    onSelect={(id) => onSizeChange(key, id)}
+                  />
+                )}
+                <span className="cost__top-range">{d.estimateRange}</span>
+                {d.note && (
+                  <span className="cost__top-note">
+                    {" — "}
+                    <GlossaryText>{d.note}</GlossaryText>
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
       {drivers.length > 0 && (
         <details className="cost__all">
           <summary>Show all {drivers.length} cost drivers</summary>
-          <CostTable drivers={drivers} assumptions={assumptions} />
+          <CostTable
+            drivers={drivers}
+            assumptions={assumptions}
+            sizeSelection={sizeSelection}
+            onSizeChange={onSizeChange}
+          />
         </details>
       )}
     </section>

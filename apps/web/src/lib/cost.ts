@@ -9,6 +9,12 @@
  */
 
 import type { CostDriver, TierName } from "./types.js";
+import {
+  ladderForDriver,
+  driverKey,
+  optionFor,
+  type SizeId,
+} from "./sizeLadder.js";
 
 export interface CostRollup {
   low: number;
@@ -141,4 +147,49 @@ export function marginalPer10kRequests(drivers: CostDriver[], tier: TierName): n
   const monthlyBandWidth = 90 * TIER_REQUESTS_PER_DAY[tier];
   if (monthlyBandWidth <= 0) return 0;
   return (variableSpread * 10_000) / monthlyBandWidth;
+}
+
+// --- Instance-size selection (GAP 1) -----------------------------------------
+// Re-scale a capacity driver's monthly range by the selected size's price RATIO,
+// so a user right-sizing EC2/RDS/… sees every downstream number update live. Pure
+// and non-mutating; returns the original driver object unchanged at medium
+// (ratio 1) so the showcased default band stays byte-identical to the seed output.
+
+/** Format a USD endpoint like the API does (2–4 decimals by magnitude). */
+export function formatUsd(n: number): string {
+  if (n >= 1) return n.toFixed(2);
+  if (n >= 0.01) return n.toFixed(3);
+  if (n > 0) return n.toFixed(4);
+  return "0.00";
+}
+
+/** A monthly $ range string, e.g. "$15.42–$30.84/mo". The en-dash + /mo shape is
+ *  load-bearing: parseMonthlyRange returns null without it, silently dropping the
+ *  driver from the rollup. Mirrors the API's formatRange byte-for-byte. */
+export function formatRange(lowUsd: number, highUsd: number): string {
+  return `$${formatUsd(lowUsd)}–$${formatUsd(highUsd)}/mo`;
+}
+
+/**
+ * Apply per-service size selections to a tier's cost drivers. Non-adjustable
+ * drivers pass through unchanged; adjustable ones have their parsed low/high
+ * multiplied by the selected size's ratio and re-stringified. Medium (ratio 1)
+ * is a no-op that returns the original driver, preserving the seed's exact range.
+ */
+export function applySizeSelection(
+  drivers: CostDriver[],
+  selection: Record<string, SizeId>,
+): CostDriver[] {
+  return drivers.map((d) => {
+    const ladder = ladderForDriver(d);
+    if (!ladder) return d;
+    const parsed = parseMonthlyRange(d.estimateRange);
+    if (!parsed) return d;
+    const ratio = optionFor(ladder, selection[driverKey(d)]).ratio;
+    if (ratio === 1) return d;
+    return {
+      ...d,
+      estimateRange: formatRange(parsed.low * ratio, parsed.high * ratio),
+    };
+  });
 }
