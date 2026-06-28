@@ -58,4 +58,24 @@ describe("CostEstimate", () => {
     fireEvent.click(within(rdsGroups[0]!).getByRole("radio", { name: "L" }));
     expect(onSizeChange).toHaveBeenCalledWith("RDS|$/hr", "l");
   });
+
+  it("keeps the top-driver order stable when a size changes (rows don't jump)", () => {
+    // EC2 ($40–$80) outranks RDS ($12–$25) at base. Shrinking EC2 to small (0.22x
+    // → ~$9–$18) would flip the SCALED order (RDS would lead), but the top-3 is
+    // ranked from the BASE drivers, so the row stays put.
+    const drivers: CostDriver[] = [
+      { service: "EC2", unit: "$/hr", estimateRange: "$40–$80/mo", note: "" },
+      { service: "RDS", unit: "$/hr", estimateRange: "$12–$25/mo", note: "" },
+    ];
+    const props = (sel: Record<string, string>) => (
+      <CostEstimate drivers={drivers} assumptions={[]} sizeSelection={sel} onSizeChange={() => undefined} />
+    );
+    const { container, rerender } = render(props({ "EC2|$/hr": "m", "RDS|$/hr": "m" }));
+    const names = (): string[] =>
+      [...container.querySelectorAll(".cost__top-svc")].map((n) => n.textContent ?? "");
+    const before = names();
+    rerender(props({ "EC2|$/hr": "s", "RDS|$/hr": "m" }));
+    expect(names()).toEqual(before);
+    expect(names()).toEqual(["EC2", "RDS"]); // EC2 still leads despite shrinking
+  });
 });

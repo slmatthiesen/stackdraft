@@ -150,7 +150,7 @@ export function TierTabs({
         <DiagramView chart={graphToMermaid(tier.nodes, tier.edges, "TB")} />
 
         <CostEstimate
-          drivers={scaledDrivers}
+          drivers={tier.costDrivers}
           assumptions={assumptions}
           sizeSelection={sizeSelection}
           onSizeChange={handleSizeChange}

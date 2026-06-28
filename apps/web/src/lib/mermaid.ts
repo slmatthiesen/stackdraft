@@ -113,6 +113,15 @@ export function graphToMermaid(
     register(edge.to, edge.to, { awsService: edge.to, role: "" });
   }
 
+  // Anchor the external caller (client) at the top: declare entry nodes first so
+  // dagre renders them at the top of the TB flow. They're graph roots (no incoming
+  // edges); declaration order settles the tie within rank 0.
+  order.sort((a, b) => {
+    const rank = (id: string): number =>
+      ENTRY_SERVICE.test((metaById.get(id)?.awsService ?? "").trim()) ? 0 : 1;
+    return rank(a) - rank(b);
+  });
+
   const safeId = new Map<string, string>();
   order.forEach((id, i) => safeId.set(id, `n${i}`));
 

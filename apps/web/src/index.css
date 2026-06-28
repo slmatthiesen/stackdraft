@@ -251,6 +251,24 @@ body {
   margin: 2rem 0;
 }
 
+/* Top-right header toolbar (copy description + back to examples), sitting opposite
+   the wordmark in the same header container. */
+.app__header {
+  position: relative;
+}
+.app__header-actions {
+  position: absolute;
+  top: 1rem;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.app__header-actions .result__back {
+  margin: 0;
+  white-space: nowrap;
+}
+
 /* "← Back to all examples" — return from a result view to the landing gallery. */
 .result__back {
   display: block;

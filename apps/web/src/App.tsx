@@ -18,6 +18,7 @@ import {
 } from "./lib/api.js";
 import { BudgetReachedNotice } from "./components/BudgetReachedNotice.js";
 import { ClarifyForm } from "./components/ClarifyForm.js";
+import { CopyButton } from "./components/CopyButton.js";
 import { CuratedGallery } from "./components/CuratedGallery.js";
 import { IntakeForm } from "./components/IntakeForm.js";
 import { KeyDecisions } from "./components/KeyDecisions.js";
@@ -260,6 +261,14 @@ export function App(): JSX.Element {
     <main className={`app ${submitted ? "app--submitted" : ""}`}>
       <header className="app__header">
         <span className="app__brand">Drafture</span>
+        {submitted && (
+          <div className="app__header-actions">
+            <CopyButton text={goal} label="Copy description" />
+            <button type="button" className="result__back" onClick={backToStart}>
+              ← All examples
+            </button>
+          </div>
+        )}
         {submitted ? (
           <h1 className="app__goal">
             <button
@@ -395,13 +404,6 @@ export function App(): JSX.Element {
 
       {phase === "result" && result && (
         <>
-          <button
-            type="button"
-            className="result__back"
-            onClick={backToStart}
-          >
-            ← Back to all examples
-          </button>
           {feedbackFresh && (
             <section className="banner banner--recommend">
               <div
