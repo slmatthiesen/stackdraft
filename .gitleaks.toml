@@ -1,6 +1,6 @@
 # gitleaks config — secret scanning for the pre-publish audit (U14) and CI (U13).
 # Runs on the full tree and full history; the first commit must be clean.
-title = "stackdraft gitleaks"
+title = "drafture gitleaks"
 
 [extend]
 useDefault = true

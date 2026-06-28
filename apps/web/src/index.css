@@ -1,5 +1,5 @@
 /*
- * Stackdraft base styles — parchment palette.
+ * Drafture base styles — parchment palette.
  *
  * WCAG AA CONTRAST (verified, sRGB relative luminance):
  *   --paper #F1E6CC  L≈0.78  full-page aged parchment
@@ -833,7 +833,7 @@ body {
   text-align: center;
 }
 
-/* "This site is built on its own StackDraft plan" — featured dogfooding callout. */
+/* "This site is built on its own Drafture plan" — featured dogfooding callout. */
 .gallery__featured {
   display: flex;
   flex-direction: column;

@@ -8,7 +8,7 @@
  *
  * Reads the feedback table directly via the store — no model call, no spend.
  *
- * Run:  pnpm --filter @stackdraft/api exec node --env-file=../../.env --import tsx scripts/reviewFeedback.ts [--up] [N]
+ * Run:  pnpm --filter @drafture/api exec node --env-file=../../.env --import tsx scripts/reviewFeedback.ts [--up] [N]
  */
 import { getConfig } from "../src/config.js";
 import { getDb, createStores } from "../src/store/sqlite.js";

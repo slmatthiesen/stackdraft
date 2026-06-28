@@ -1,5 +1,5 @@
 ---
-title: "feat: Stackdraft — describe a system, get a safe, costed AWS design"
+title: "feat: Drafture — describe a system, get a safe, costed AWS design"
 type: feat
 date: 2026-06-26
 status: draft
@@ -7,7 +7,7 @@ depth: deep
 origin: none (solo ce-plan; scope confirmed interactively 2026-06-26)
 ---
 
-# feat: Stackdraft
+# feat: Drafture
 
 A publicly hosted, one-page web tool. A user describes the system they want to build in a text box; the tool returns a recommended AWS architecture as a labeled data-flow diagram, plain-language setup instructions, and cost estimates in each service's **native cost unit** (per-1,000 operations where applicable, plus capacity-time / storage / data-transfer units), presented across robustness tiers with the trade-offs spelled out. Security and a safe-by-default posture are baked into every recommendation. The operator self-hosts on DigitalOcean and pays the compute, so **cheap-to-run and spam-resistant are tier-1 requirements**.
 
@@ -186,7 +186,7 @@ sequenceDiagram
 ## Output Structure
 
 ```
-stackdraft/
+drafture/
 ├─ LICENSE                      # MIT
 ├─ README.md                    # showcase: what/why, architecture, run-local, deploy, demo
 ├─ CONTRIBUTING.md

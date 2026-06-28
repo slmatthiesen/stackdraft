@@ -9,7 +9,7 @@
  * its own stage (~1k → ~10k → ~100k requests/day).
  *
  * Run (set DB_PATH to the gallery DB if not running from the repo root):
- *   pnpm --filter @stackdraft/api exec tsx scripts/recomputeCuratedCosts.ts
+ *   pnpm --filter @drafture/api exec tsx scripts/recomputeCuratedCosts.ts
  */
 import { getConfig } from "../src/config.js";
 import { buildAppContext } from "../src/app/context.js";

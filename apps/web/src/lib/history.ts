@@ -18,7 +18,7 @@ export interface HistoryEntry {
   savedAt: number;
 }
 
-const KEY = "stackdraft.history.v1";
+const KEY = "drafture.history.v1";
 const MAX = 20;
 
 export function loadHistory(): HistoryEntry[] {

@@ -1,5 +1,5 @@
 /**
- * @stackdraft/kb — seeded curated knowledge base (U4).
+ * @drafture/kb — seeded curated knowledge base (U4).
  *
  * Contracts only here; the JSON seed files are populated in U4 and loaded into
  * the stores on first boot. Each fact is citeable (source URL) so research-on-miss

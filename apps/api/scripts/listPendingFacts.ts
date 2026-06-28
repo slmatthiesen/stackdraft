@@ -8,7 +8,7 @@
  * DB_PATH is read straight from env (matching the config default) so reviewing
  * facts never requires an ANTHROPIC_API_KEY just to open the database.
  *
- *   pnpm --filter @stackdraft/api list-pending-facts
+ *   pnpm --filter @drafture/api list-pending-facts
  */
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -16,7 +16,7 @@ import { resolve } from "node:path";
 import { getDb, createStores } from "../src/store/sqlite.js";
 import type { MemoryDoc } from "../src/store/types.js";
 
-const DEFAULT_DB_PATH = "./data/stackdraft.db";
+const DEFAULT_DB_PATH = "./data/drafture.db";
 
 function truncate(text: string, max: number): string {
   const oneLine = text.replace(/\s+/g, " ").trim();

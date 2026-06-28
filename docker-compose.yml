@@ -6,8 +6,8 @@ services:
     env_file:
       - .env
     volumes:
-      - stackdraft-data:/app/data
+      - drafture-data:/app/data
     restart: unless-stopped
 
 volumes:
-  stackdraft-data:
+  drafture-data:

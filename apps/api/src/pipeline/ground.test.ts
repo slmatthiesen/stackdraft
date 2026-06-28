@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
-import securityBaselines from "@stackdraft/kb/security-baselines.json" with { type: "json" };
-import type { SecurityBaseline } from "@stackdraft/kb";
+import securityBaselines from "@drafture/kb/security-baselines.json" with { type: "json" };
+import type { SecurityBaseline } from "@drafture/kb";
 
 import { openTempDb, createStores, type Stores } from "../store/sqlite.js";
 import { seedKnowledgeBase } from "../store/kbLoader.js";

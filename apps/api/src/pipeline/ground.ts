@@ -15,9 +15,9 @@
  *    in the prefix changes the cache key every request, so the cache never hits
  *    and the write premium (1.25×/2×) is wasted (KTD11).
  */
-import securityBaselines from "@stackdraft/kb/security-baselines.json" with { type: "json" };
-import referenceArchitectures from "@stackdraft/kb/reference-architectures.json" with { type: "json" };
-import type { SecurityBaseline, ReferenceArchitecture } from "@stackdraft/kb";
+import securityBaselines from "@drafture/kb/security-baselines.json" with { type: "json" };
+import referenceArchitectures from "@drafture/kb/reference-architectures.json" with { type: "json" };
+import type { SecurityBaseline, ReferenceArchitecture } from "@drafture/kb";
 
 import type { GroundedPrompt } from "../llm/provider.js";
 import type { MemoryStore, MemoryDoc } from "../store/types.js";
@@ -30,7 +30,7 @@ const patternById = new Map(patterns.map((p) => [p.id, p] as const));
  * System prompt: the safe-by-default mandate + the generation rules (a)–(f) the
  * model must follow. Static by construction — no per-request content.
  */
-const SYSTEM_PROMPT = `You are Stackdraft, a STAFF/PRINCIPAL-level AWS solutions architect. Produce the single best production-grade design across three tiers — reason about trade-offs, don't just enumerate options. Given a plain-language description of a system to build, return ONLY a typed architecture graph that matches the provided schema — no prose outside it.
+const SYSTEM_PROMPT = `You are Drafture, a STAFF/PRINCIPAL-level AWS solutions architect. Produce the single best production-grade design across three tiers — reason about trade-offs, don't just enumerate options. Given a plain-language description of a system to build, return ONLY a typed architecture graph that matches the provided schema — no prose outside it.
 
 OUTPUT STYLE — STRUCTURE + DIFFERENCES, NOT EXPLANATION (this is the whole point): emit the GRAPH and the DELTAS between tiers, never paragraphs explaining what a service does or restating the same security posture three times. A node is structure: an AWS service, a SHORT role label (≤ ~4 words, e.g. "thumbnail worker", "primary datastore" — NOT a sentence), and short security-control TAGS (e.g. "TLS", "private subnet", "least-priv role", "DLQ", "idempotent consumer"). Do NOT write prose describing a node; the service + role + tags ARE the description. This keeps the response small and fast — density over volume is the senior signal.
 

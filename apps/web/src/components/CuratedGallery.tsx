@@ -10,7 +10,7 @@ import { useState } from "react";
 import { voteCurated } from "../lib/api.js";
 import type { CuratedSummary } from "../lib/types.js";
 
-const VOTE_KEY = "stackdraft.curated.votes.v1";
+const VOTE_KEY = "drafture.curated.votes.v1";
 
 /** The curated run that designs THIS site's own deployment — featured above the list. */
 const SELF_HOST_ID = "self-hosting-a-stateful-web-app";
@@ -97,7 +97,7 @@ export function CuratedGallery({
             </>
           ) : (
             <>
-              <strong>This site is built on its own StackDraft plan.</strong>
+              <strong>This site is built on its own Drafture plan.</strong>
               <span className="gallery__featured-sub">See how it was designed →</span>
             </>
           )}

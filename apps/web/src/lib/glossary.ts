@@ -1,14 +1,14 @@
 /**
  * Client-side term glossary (deterministic, no LLM).
  *
- * The term data is BUNDLED from the single source of truth — `@stackdraft/kb`'s
+ * The term data is BUNDLED from the single source of truth — `@drafture/kb`'s
  * glossary.json — at build time (no runtime fetch), so the same curated
  * definitions ship with the app and there's nothing to keep in sync by hand.
  * {@link splitByTerms} tokenizes a string into plain + known-term parts so the UI
  * can render a hover tooltip on each known term.
  */
-import glossaryData from "@stackdraft/kb/glossary.json";
-import type { GlossaryTerm } from "@stackdraft/kb";
+import glossaryData from "@drafture/kb/glossary.json";
+import type { GlossaryTerm } from "@drafture/kb";
 
 const TERMS = glossaryData as GlossaryTerm[];
 

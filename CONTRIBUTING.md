@@ -1,4 +1,4 @@
-# Contributing to Stackdraft
+# Contributing to Drafture
 
 Thanks for your interest. This is an open-source showcase project, and contributions — bug reports, fixes, docs, and features — are welcome. By participating you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
@@ -10,8 +10,8 @@ Thanks for your interest. This is an open-source showcase project, and contribut
 ## Setup
 
 ```bash
-git clone https://github.com/slmatthiesen/stackdraft.git
-cd stackdraft
+git clone https://github.com/slmatthiesen/drafture.git
+cd drafture
 pnpm install
 cp .env.example .env          # set ANTHROPIC_API_KEY; other defaults are safe
 ```

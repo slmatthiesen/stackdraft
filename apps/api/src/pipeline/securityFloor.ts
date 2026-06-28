@@ -7,8 +7,8 @@
  * (`security-baselines.json`) and surface each baseline's short `summary` line as
  * the global `securityFloor`. Correct by construction, zero model tokens.
  */
-import securityBaselines from "@stackdraft/kb/security-baselines.json" with { type: "json" };
-import type { SecurityBaseline } from "@stackdraft/kb";
+import securityBaselines from "@drafture/kb/security-baselines.json" with { type: "json" };
+import type { SecurityBaseline } from "@drafture/kb";
 
 const baselines = securityBaselines as SecurityBaseline[];
 

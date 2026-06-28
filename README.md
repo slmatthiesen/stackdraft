@@ -1,23 +1,23 @@
-# Stackdraft
+# Drafture
 
 **Describe a system in plain English — get a safe, costed AWS architecture across budget / balanced / resilient tiers.**
 
-[![CI](https://github.com/slmatthiesen/stackdraft/actions/workflows/ci.yml/badge.svg)](https://github.com/slmatthiesen/stackdraft/actions/workflows/ci.yml)
+[![CI](https://github.com/slmatthiesen/drafture/actions/workflows/ci.yml/badge.svg)](https://github.com/slmatthiesen/drafture/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-22-339933.svg)](https://nodejs.org)
 
-**Live at [stackdraft.dev](https://stackdraft.dev).**
+**Live at [drafture.dev](https://drafture.dev).**
 
-You type what you want to build; Stackdraft returns a recommended AWS architecture as a labeled data-flow diagram, ordered setup steps, and cost estimates in each service's **native cost unit** — presented across three robustness tiers with the trade-offs spelled out. Security and a safe-by-default posture are baked into every recommendation, not bolted on.
+You type what you want to build; Drafture returns a recommended AWS architecture as a labeled data-flow diagram, ordered setup steps, and cost estimates in each service's **native cost unit** — presented across three robustness tiers with the trade-offs spelled out. Security and a safe-by-default posture are baked into every recommendation, not bolted on.
 
-> Choosing the right AWS services *and* doing it securely and cost-effectively is two hard problems scattered across the Well-Architected Framework, reference architectures, the pricing calculator, and tribal knowledge. Stackdraft collapses that into one interaction: a plain-English problem in, a safe-by-default, costed, diagrammed design with explicit robustness/cost trade-offs out.
+> Choosing the right AWS services *and* doing it securely and cost-effectively is two hard problems scattered across the Well-Architected Framework, reference architectures, the pricing calculator, and tribal knowledge. Drafture collapses that into one interaction: a plain-English problem in, a safe-by-default, costed, diagrammed design with explicit robustness/cost trade-offs out.
 
 ---
 
 ## How it works
 
 1. **You describe the system.** Free-form text — "a webhook ingest API that fans out to background workers," etc.
-2. **At most one or two clarifying questions**, asked only when the answer materially changes the architecture; otherwise Stackdraft proceeds.
+2. **At most one or two clarifying questions**, asked only when the answer materially changes the architecture; otherwise Drafture proceeds.
 3. **Grounded generation.** A curated knowledge base (security baselines, reference-architecture patterns, native-unit pricing facts) plus a persistent memory cache is assembled into the prompt. On a miss for an unseen topic, an optional research step fetches the current best practice and writes it back to memory (quarantined as unverified until an operator promotes it).
 4. **Structured output, not prose.** The LLM (Claude, via a provider-abstracted layer) returns a validated typed graph — nodes, payload-labeled edges, per-tier services / security / scaling / cost-drivers / setup / trade-offs. The backend renders Mermaid diagrams and cost tables **deterministically** from that graph, so diagrams are reliable and costs are computable.
 5. **Three tiers in one pass.** Budget / balanced / resilient are renderings of the same problem along the **robustness** axis (single-AZ vs multi-AZ, on-demand vs provisioned). All three carry the full security floor — the budget tier is the *minimum safe cost*, never a security-relaxed option.
@@ -91,8 +91,8 @@ flowchart TB
 Requires **Node 22** and **pnpm 10.5.0**.
 
 ```bash
-git clone https://github.com/slmatthiesen/stackdraft.git
-cd stackdraft
+git clone https://github.com/slmatthiesen/drafture.git
+cd drafture
 pnpm install
 cp .env.example .env          # then set ANTHROPIC_API_KEY in .env
 pnpm dev
@@ -113,7 +113,7 @@ pnpm typecheck   # pnpm -r typecheck
 
 ## Deploy
 
-Stackdraft builds to a **single Docker container** (the API serves the SPA build; SQLite lives on a mounted volume). The hosted demo at [stackdraft.dev](https://stackdraft.dev) runs on DigitalOcean behind Cloudflare for edge rate-limiting and optional Turnstile. Run the monthly pricing refresh as a separate scheduled task so a large offer-file pull can't starve the request-serving process.
+Drafture builds to a **single Docker container** (the API serves the SPA build; SQLite lives on a mounted volume). The hosted demo at [drafture.dev](https://drafture.dev) runs on DigitalOcean behind Cloudflare for edge rate-limiting and optional Turnstile. Run the monthly pricing refresh as a separate scheduled task so a large offer-file pull can't starve the request-serving process.
 
 See [docs/deploy.md](./docs/deploy.md) for the full DigitalOcean + Cloudflare walkthrough.
 
@@ -139,7 +139,7 @@ See [docs/deploy.md](./docs/deploy.md) for the full DigitalOcean + Cloudflare wa
 
 ## Security
 
-Found a vulnerability? Please report it privately — see [SECURITY.md](./SECURITY.md). Stackdraft models the safe-by-default posture it recommends: no secrets in the tree or history, secrets loaded from env and redacted in logs, conservative defaults.
+Found a vulnerability? Please report it privately — see [SECURITY.md](./SECURITY.md). Drafture models the safe-by-default posture it recommends: no secrets in the tree or history, secrets loaded from env and redacted in logs, conservative defaults.
 
 ## Contributing
 

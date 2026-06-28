@@ -31,7 +31,7 @@ What actually happened. Include error messages or logs (redact any secrets).
 - OS:
 - Node version:
 - pnpm version:
-- Stackdraft commit / version:
+- Drafture commit / version:
 
 ## Additional context
 
