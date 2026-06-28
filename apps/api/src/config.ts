@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 /**
  * Centralized, validated runtime configuration (12-factor).
@@ -115,8 +117,47 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return parsed.data;
 }
 
+/**
+ * Best-effort load of the nearest `.env` by walking up from the process CWD.
+ * `tsx` (`pnpm dev`) and a bare `node` don't load `.env` (the built-server path
+ * uses `--env-file`), so without this `pnpm dev` can't see ANTHROPIC_API_KEY and
+ * fails fast. Never overrides vars already in the environment — real env /
+ * `--env-file` / inline shell always win. `.env` is gitignored, so a production
+ * deploy with real env vars (no `.env` file) is unaffected (no-op).
+ */
+function loadEnvFile(): void {
+  let dir = process.cwd();
+  for (let i = 0; i < 8; i++) {
+    let text: string;
+    try {
+      text = readFileSync(resolve(dir, ".env"), "utf8");
+    } catch {
+      const parent = resolve(dir, "..");
+      if (parent === dir) return; // filesystem root — no .env found
+      dir = parent;
+      continue;
+    }
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+      if (!match) continue;
+      const key = match[1]!;
+      if (key in process.env) continue; // don't clobber real env / --env-file
+      let value = match[2]!;
+      value = value.replace(/\s+#.*$/, ""); // trailing inline comment
+      value = value.replace(/^["']|["']$/g, ""); // surrounding quotes
+      process.env[key] = value;
+    }
+    return; // first .env found wins
+  }
+}
+
 export function getConfig(): Config {
-  if (!cached) cached = loadConfig();
+  if (!cached) {
+    loadEnvFile();
+    cached = loadConfig();
+  }
   return cached;
 }
 
