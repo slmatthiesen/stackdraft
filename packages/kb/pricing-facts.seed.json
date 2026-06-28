@@ -96,6 +96,14 @@
     "source": "https://aws.amazon.com/ec2/pricing/on-demand/"
   },
   {
+    "service": "EBS",
+    "region": "us-east-1",
+    "unit": "gb-month",
+    "usd": 0.08,
+    "note": "gp3 general-purpose SSD volume, $0.08/GB-month. The durable home for an embedded file DB (SQLite/DuckDB) pinned to one compute node — never EFS/NFS (file locking is unreliable over a network FS).",
+    "source": "https://aws.amazon.com/ebs/pricing/"
+  },
+  {
     "service": "RDS",
     "region": "us-east-1",
     "unit": "hour",

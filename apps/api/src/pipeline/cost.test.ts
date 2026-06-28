@@ -386,3 +386,34 @@ describe("estimateCosts", () => {
     expect(twice.assumptions.filter((a) => a === onDemandDisclaimer(REGION))).toHaveLength(1);
   });
 });
+
+describe("normalizeService keyword fallback (GAP 3)", () => {
+  let stores: Stores;
+  beforeEach(() => {
+    stores = createStores(openTempDb());
+    seedKnowledgeBase(stores);
+  });
+
+  // Descriptive model labels that don't exact-match the seed must still price
+  // (previously silently $0). Returns the priced service names for a one-node tier.
+  const driversFor = (awsService: string): string[] => {
+    const base = result();
+    base.tiers = [tier("balanced", [node(awsService)], [])];
+    return estimateCosts(base, stores.pricing, REGION).tiers[0]!.costDrivers.map(
+      (d) => d.service,
+    );
+  };
+
+  it.each([
+    ["ECS Fargate task", "Fargate"],
+    ["Aurora Serverless v2 (Postgres)", "Aurora"],
+    ["SNS topic", "SNS"],
+    ["SQS queue", "SQS"],
+    ["EventBridge Scheduler", "EventBridge"],
+    ["ElastiCache for Redis", "ElastiCache"],
+    ["OpenSearch Service", "OpenSearch"],
+    ["EBS volume (gp3)", "EBS"],
+  ])("prices %s as %s, not silently $0", (label, canonical) => {
+    expect(driversFor(label)).toContain(canonical);
+  });
+});

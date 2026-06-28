@@ -253,7 +253,31 @@ function buildSeedFallback(): Map<string, PriceRecord[]> {
 /**
  * Normalize the model's free-form AWS service label to the canonical key used by
  * the pricing seed (strip "Amazon "/"AWS " marketing prefixes, map long names).
+ *
+ * Two stages: exact alias map, then a keyword fallback. The fallback catches the
+ * descriptive labels the model emits that don't exact-match the seed — "ECS
+ * Fargate task", "Aurora Serverless v2 (Postgres)", "SNS topic", "EventBridge
+ * Scheduler" — which otherwise priced silently as $0 (GAP 3). Each pattern matches
+ * a distinctive token at a word boundary; specific-first ordering.
  */
+const KEYWORD_FALLBACK: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\baurora\b/i, "Aurora"],
+  [/\bfargate\b/i, "Fargate"],
+  [/\beventbridge\b/i, "EventBridge"],
+  [/\belasticache\b|\bredis\b|\bvalkey\b/i, "ElastiCache"],
+  [/\bopensearch\b|\belasticsearch\b/i, "OpenSearch"],
+  [/\bkinesis\b/i, "Kinesis"],
+  [/\bdynamodb\b/i, "DynamoDB"],
+  [/\bcognito\b/i, "Cognito"],
+  [/\bcloudfront\b/i, "CloudFront"],
+  [/\bsns\b/i, "SNS"],
+  [/\bsqs\b/i, "SQS"],
+  [/\bses\b/i, "SES"],
+  [/\bwaf\b/i, "WAF"],
+  [/\bx-?ray\b/i, "X-Ray"],
+  [/\bebs\b/i, "EBS"],
+];
+
 function normalizeService(name: string): string {
   const stripped = name.trim().replace(/^(amazon|aws)\s+/i, "");
   const aliases: Record<string, string> = {
@@ -271,7 +295,12 @@ function normalizeService(name: string): string {
     "WebSocket API": "API Gateway WebSocket",
     Lambda: "Lambda",
   };
-  return aliases[stripped] ?? stripped;
+  const aliased = aliases[stripped];
+  if (aliased) return aliased;
+  for (const [pattern, canonical] of KEYWORD_FALLBACK) {
+    if (pattern.test(stripped)) return canonical;
+  }
+  return stripped;
 }
 
 /**
