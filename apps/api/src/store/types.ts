@@ -238,6 +238,48 @@ export interface GenerationVoteResult {
   status: GenerationStatus;
 }
 
+/** Where an embedded design lives — its body is fetched from the matching store by id. */
+export type DesignSource = "generation" | "curated";
+
+/** A stored design embedding: the vector + enough to fetch the design and re-embed it. */
+export interface DesignVectorRecord {
+  /** The generation/curated id (PK) — the design's body lives in that store. */
+  id: string;
+  source: DesignSource;
+  /** The /api/generate cache key of the embedded prompt (telemetry / dedupe). */
+  promptHash: string;
+  /** The exact text that was embedded (description + answers) — kept so a model swap can re-embed. */
+  text: string;
+  /** Embedding model id — `search` only compares vectors from the SAME model (never mixes spaces). */
+  model: string;
+  createdAt: number;
+}
+
+/** One nearest-neighbor hit: which design + how close (cosine, [-1, 1]). */
+export interface DesignVectorMatch {
+  id: string;
+  source: DesignSource;
+  similarity: number;
+}
+
+/**
+ * The semantic learning network's corpus (KTD5). One row per embedded design; a
+ * brute-force cosine scan over the same-model rows powers retrieval (small corpus,
+ * sub-ms). A vector-index backend can drop in behind this interface unchanged.
+ */
+export interface DesignVectorStore {
+  /** Insert or replace the embedding for a design (re-embedding overwrites by id). */
+  upsert(input: { id: string; source: DesignSource; promptHash: string; text: string; vector: number[]; model: string }): void;
+  /** Already embedded under this model? Lets the backfill skip work (idempotent). */
+  hasForModel(id: string, model: string): boolean;
+  /** Rows embedded under `model` (the comparable corpus). */
+  count(model: string): number;
+  /** Brute-force cosine top-k against the same-`model` corpus, best first. */
+  search(queryVector: number[], model: string, topK: number): DesignVectorMatch[];
+  /** Remove an embedding (e.g. when a design is hidden/deleted). */
+  delete(id: string): boolean;
+}
+
 export interface GenerationsStore {
   /**
    * Insert a new generation, or refresh an existing one on promptHash conflict

@@ -17,6 +17,7 @@ import { SqliteSpendLedger } from "./spendLedger.js";
 import { SqliteCuratedStore } from "./curated.js";
 import { SqliteFeedbackStore } from "./feedback.js";
 import { SqliteGenerationsStore } from "./generations.js";
+import { SqliteDesignVectorStore } from "./designVectors.js";
 
 /** Instance type of an open better-sqlite3 database. */
 export type Db = Database.Database;
@@ -151,6 +152,18 @@ const MIGRATIONS = `
     created_at INTEGER NOT NULL,
     PRIMARY KEY (generation_id, voter)
   );
+
+  CREATE TABLE IF NOT EXISTS design_embeddings (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    prompt_hash TEXT NOT NULL,
+    text TEXT NOT NULL,
+    vector BLOB NOT NULL,
+    dim INTEGER NOT NULL,
+    model TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_design_embeddings_model ON design_embeddings(model);
 `;
 
 /** Open (creating parent dirs as needed), enable WAL, and migrate. */
@@ -198,6 +211,7 @@ export interface Stores {
   curated: SqliteCuratedStore;
   feedback: SqliteFeedbackStore;
   generations: SqliteGenerationsStore;
+  designVectors: SqliteDesignVectorStore;
 }
 
 /** Construct all stores bound to one db instance (shared clock). */
@@ -210,5 +224,6 @@ export function createStores(db: Db, clock: Clock = systemClock): Stores {
     curated: new SqliteCuratedStore(db, clock),
     feedback: new SqliteFeedbackStore(db, clock),
     generations: new SqliteGenerationsStore(db, clock),
+    designVectors: new SqliteDesignVectorStore(db, clock),
   };
 }

@@ -74,6 +74,12 @@ export interface GenerateResponse {
   recommendedTier: TierName;
   recommendationRationale: string;
   keyDecisions: KeyDecision[];
+  /**
+   * Present when the design was served instantly from the learning network (a near-
+   * match to a design we've already shipped) instead of freshly generated. Drives the
+   * "from our library" badge + the "generate fresh instead" option.
+   */
+  fromLibrary?: { basedOnPrompt: string; similarity: number };
 }
 
 /** 200 response from `/api/config` — an on-demand reference Terraform config. */
