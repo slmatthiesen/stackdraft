@@ -125,6 +125,9 @@ function Home(): JSX.Element {
   const [selectedTier, setSelectedTier] = useState<TierName>("balanced");
   // Admin-curated example designs (server-stored) shown on the landing page.
   const [curated, setCurated] = useState<CuratedSummary[]>([]);
+  // True until the first curated fetch settles — drives a skeleton so the gallery
+  // space is reserved instead of popping in after the round-trip (the blank-then-fill flash).
+  const [curatedLoading, setCuratedLoading] = useState<boolean>(true);
   // Thumbs-up/down on the current (fresh-generation-only) result. Feedback keys off the
   // generation's prompt inputs (goal + lastAttempt), so it only ever rides a result we
   // produced here — re-opened designs deep-link to /design/:id and render without it.
@@ -133,7 +136,9 @@ function Home(): JSX.Element {
 
   // Load the curated gallery once on mount; failures degrade to no gallery.
   useEffect(() => {
-    void fetchCurated().then(setCurated);
+    void fetchCurated()
+      .then(setCurated)
+      .finally(() => setCuratedLoading(false));
   }, []);
 
   const submitted = phase !== "idle";
@@ -357,7 +362,7 @@ function Home(): JSX.Element {
         </section>
       )}
 
-      {!submitted && <CuratedGallery entries={curated} onOpen={openCurated} />}
+      {!submitted && <CuratedGallery entries={curated} loading={curatedLoading} onOpen={openCurated} />}
 
       {!submitted && (
         <RecentDesigns

@@ -34,13 +34,35 @@ function persistLocalVotes(votes: Record<string, VoteValue>): void {
   }
 }
 
+/** Placeholder cards shown while the first curated fetch is in flight, so the gallery
+ *  reserves its space and fades in instead of popping after the round-trip. */
+function GallerySkeleton(): JSX.Element {
+  return (
+    <section className="gallery" aria-hidden="true">
+      <h2 className="gallery__title">See how it works with these</h2>
+      <p className="gallery__sub">Real designs we've generated — open one instantly, free.</p>
+      <ul className="gallery__list">
+        {Array.from({ length: 6 }, (_, i) => (
+          <li key={i} className="gallery__item gallery__item--skeleton">
+            <span className="gallery__skeleton-line gallery__skeleton-line--name" />
+            <span className="gallery__skeleton-line gallery__skeleton-line--meta" />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function CuratedGallery({
   entries,
   onOpen,
+  loading = false,
 }: {
   entries: CuratedSummary[];
   /** May be async (it fetches the stored design); the card shows a spinner until it settles. */
   onOpen: (id: string) => void | Promise<void>;
+  /** First fetch still in flight — show the skeleton rather than nothing. */
+  loading?: boolean;
 }): JSX.Element | null {
   // Live counts (seeded from the server list, updated on each successful vote).
   const [counts, setCounts] = useState<Record<string, { up: number; down: number }>>(() =>
@@ -52,7 +74,7 @@ export function CuratedGallery({
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [votingId, setVotingId] = useState<string | null>(null);
 
-  if (entries.length === 0) return null;
+  if (entries.length === 0) return loading ? <GallerySkeleton /> : null;
 
   const open = async (id: string): Promise<void> => {
     setOpeningId(id);
