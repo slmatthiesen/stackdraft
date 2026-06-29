@@ -86,23 +86,23 @@ const DEMOS: Demo[] = [
   {
     title: "Self-hosting a stateful web app",
     description:
-      "A public web tool (this site itself): a single Node.js process in one Docker " +
-      "container runs a Fastify HTTP API that serves both a built static React SPA and " +
-      "`/api/*` JSON endpoints on one port (8080). The API is stateful — for each request " +
-      "it calls the Anthropic LLM over outbound HTTPS and writes to a database. The entire " +
-      "datastore is ONE SQLite file (better-sqlite3, single-writer, on disk) holding a " +
-      "memory cache, a response cache, a pricing cache, and a spend ledger; it must be " +
-      "durable and backed up, and it cannot be served by multiple writers at once. LLM " +
-      "calls are the dominant cost; the app self-limits them with per-IP rate limiting, a " +
-      "per-IP daily cap, token caps, a 24h identical-response cache, and a hard global " +
-      "daily-spend ceiling — so absolute compute need is small. It sits behind Cloudflare " +
-      "(edge TLS, edge rate-limiting, optional Turnstile) and trusts CF-Connecting-IP; " +
-      "there is no inbound database path. Traffic is low (a personal portfolio/showcase) " +
-      "and bursty when shared. A monthly offline batch job streams large public pricing " +
-      "files (hundreds of MB) to refresh a cache table, and must run off the request path. " +
-      "The same footprint should also host several other small static web pages cheaply. " +
-      "Optimize for low cost and simple ops while keeping the DB durable and the design " +
-      "able to scale one step up without a rewrite.",
+      "A public web tool (this site itself): one Node.js process in a single Docker " +
+      "container runs a Fastify server that serves a built static React SPA and `/api/*` " +
+      "JSON on one port (8080). It is stateful — each request may call the Anthropic LLM " +
+      "over outbound HTTPS and read/write ONE SQLite file (better-sqlite3, single-writer, " +
+      "on disk) holding a memory cache, response cache, pricing cache, a spend ledger, " +
+      "every persisted generation (with an operator approval queue), the curated examples, " +
+      "and votes/feedback. It serves a community gallery of operator-approved designs and " +
+      "generates reference Terraform (HCL) on demand, both as $0 cached DB reads. LLM calls " +
+      "are the dominant cost and are self-limited by per-IP rate limiting, a per-IP daily " +
+      "cap, token caps, a 24h identical-response cache, and a hard global daily-spend " +
+      "ceiling, so absolute compute need is small. It sits behind Cloudflare (edge TLS, " +
+      "rate-limiting, optional Turnstile) and trusts CF-Connecting-IP; there is no inbound " +
+      "database path. Traffic is low (a personal portfolio/showcase) and bursty when " +
+      "shared. A monthly offline batch job streams large public pricing files (hundreds of " +
+      "MB) to refresh a cache table and must run off the request path. Optimize for low " +
+      "cost and simple ops while keeping the DB durable and backed up and the design able " +
+      "to scale one step up without a rewrite.",
     answers: [
       "Downtime tolerance: Important",
       "Data sensitivity: No",
