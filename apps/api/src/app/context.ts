@@ -16,6 +16,8 @@ import type { Config } from "../config.js";
 import type { LlmProvider } from "../llm/provider.js";
 import { ClaudeProvider } from "../llm/claude.js";
 import { GlmProvider } from "../llm/glm.js";
+import type { EmbeddingProvider } from "../llm/embeddings/provider.js";
+import { buildEmbeddingProvider } from "../llm/embeddings/factory.js";
 
 import { getDb, createStores, type Db, type Stores } from "../store/sqlite.js";
 import { seedKnowledgeBase } from "../store/kbLoader.js";
@@ -50,6 +52,8 @@ export interface AppGuards {
 export interface AppContext {
   config: Config;
   provider: LlmProvider;
+  /** Embedding provider for the semantic learning network; null when retrieval is off/unconfigured. */
+  embedder: EmbeddingProvider | null;
   stores: Stores;
   /** Token→USD rates for ledger reconcile + telemetry (KTD7). */
   pricing: LlmPricing;
@@ -63,6 +67,8 @@ export interface AppContext {
 export interface AppContextOverrides {
   /** Fake provider for tests (canned schema-valid results, no network). */
   provider?: LlmProvider;
+  /** Fake/disabled embedder for tests. Pass `null` to exercise the retrieval-off path. */
+  embedder?: EmbeddingProvider | null;
   /** Pre-built stores (e.g. an in-memory temp DB) — skips opening config.DB_PATH. */
   stores?: Stores;
   /** Capture telemetry lines in tests. */
@@ -97,6 +103,9 @@ export function buildAppContext(
   seedKnowledgeBase(stores);
 
   const provider = overrides.provider ?? buildProvider(config);
+  // `embedder` may be explicitly null in tests (exercise the retrieval-off path), so
+  // distinguish "not provided" (build from config) from "provided as null" (disable).
+  const embedder = "embedder" in overrides ? overrides.embedder ?? null : buildEmbeddingProvider(config, overrides.fetchFn);
 
   const guards: AppGuards = {
     accessGate: makeAccessGate({ user: config.ACCESS_GATE_USER, pass: config.ACCESS_GATE_PASS }),
@@ -108,6 +117,7 @@ export function buildAppContext(
   return {
     config,
     provider,
+    embedder,
     stores,
     pricing: pricingFromConfig(config),
     guards,

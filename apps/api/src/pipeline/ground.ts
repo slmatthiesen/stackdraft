@@ -272,6 +272,8 @@ export interface GroundingInput {
   description: string;
   answers?: string[];
   memory: MemoryStore;
+  /** Pre-rendered "similar designs we've shipped" block from the learning network (retrieve.ts). */
+  exemplarsSection?: string;
 }
 
 export interface GroundingResult {
@@ -332,6 +334,9 @@ export function assembleGrounding(input: GroundingInput): GroundingResult {
   if (patternsSection) sections.push(patternsSection);
   const memorySection = renderMemorySection(hits);
   if (memorySection) sections.push(memorySection);
+  // Learning-network exemplars (nearest approved designs) — request-specific, so it
+  // rides the volatile suffix after the cache breakpoint (KTD11), never the prefix.
+  if (input.exemplarsSection) sections.push(input.exemplarsSection);
   sections.push(`## User request\n${input.description}`);
   if (answers.length > 0) {
     sections.push(

@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 import { loadConfig } from "../config.js";
 import type { LlmProvider, ProviderResult, Usage } from "../llm/provider.js";
+import type { EmbeddingProvider } from "../llm/embeddings/provider.js";
 import type { ArchitectureResult, Clarification, TierName } from "../schema/architecture.js";
 import { TIER_NAMES } from "../schema/architecture.js";
 
@@ -111,7 +112,9 @@ function makeFake(opts: FakeOpts = {}): Fake {
 }
 
 function testConfig(overrides: Record<string, string> = {}): ReturnType<typeof loadConfig> {
-  return loadConfig({ ANTHROPIC_API_KEY: "test-key", NODE_ENV: "test", DB_PATH: ":memory:", ...overrides });
+  // Retrieval OFF by default in tests (no Voyage key, no network); the learning-network
+  // tests inject a fake embedder explicitly.
+  return loadConfig({ ANTHROPIC_API_KEY: "test-key", NODE_ENV: "test", DB_PATH: ":memory:", EMBEDDING_PROVIDER: "none", ...overrides });
 }
 
 interface Harness {
@@ -121,7 +124,11 @@ interface Harness {
   lines: string[];
 }
 
-async function buildHarness(fake: Fake, configOverrides: Record<string, string> = {}): Promise<Harness> {
+async function buildHarness(
+  fake: Fake,
+  configOverrides: Record<string, string> = {},
+  extra: { embedder?: EmbeddingProvider | null } = {},
+): Promise<Harness> {
   const stores = createStores(openTempDb());
   const lines: string[] = [];
   const sink: TelemetrySink = (line) => lines.push(line);
@@ -129,6 +136,7 @@ async function buildHarness(fake: Fake, configOverrides: Record<string, string> 
     provider: fake.provider,
     stores,
     telemetrySink: sink,
+    ...("embedder" in extra ? { embedder: extra.embedder } : {}),
   });
   const app = Fastify({ logger: false, trustProxy: true });
   await registerApiRoutes(app, ctx);
@@ -174,6 +182,49 @@ describe("POST /api/generate", () => {
     expect(rec.cacheHit).toBe(false);
     expect(rec.outcome).toBe("ok");
     expect(rec.costUsd as number).toBeGreaterThan(0);
+
+    await app.close();
+  });
+
+  it("serves an instant hit from the learning network — no LLM, no clarify, $0, deep-linkable", async () => {
+    const fake = makeFake();
+    const PROMPT = "a notification fan-out service with retries and a DLQ";
+    // A fake embedder that maps every text to the same vector → cosine 1 with the seeded design.
+    const embedder: EmbeddingProvider = { model: "voyage-3-lite", embed: async (texts) => texts.map(() => [1, 0, 0]) };
+    const { app, stores, lines } = await buildHarness(fake, {}, { embedder });
+
+    // Seed one APPROVED design + its embedding into the corpus.
+    const { id } = stores.generations.upsert({
+      promptHash: "ph-notif",
+      description: PROMPT,
+      answers: [],
+      model: "claude-sonnet-4-6",
+      region: "us-east-1",
+      recommendedTier: "balanced",
+      tags: ["messaging"],
+      body: JSON.stringify(validArchitecture()),
+      clientIp: "9.9.9.9",
+    });
+    stores.generations.setStatus(id, "approved");
+    stores.designVectors.upsert({ id, source: "generation", promptHash: "ph-notif", text: PROMPT, vector: [1, 0, 0], model: "voyage-3-lite" });
+
+    const res = await app.inject({ method: "POST", url: "/api/generate", payload: { description: PROMPT } });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.id).toBe(id); // deep-linkable to the existing /design/:id
+    expect(body.fromLibrary).toBeDefined();
+    expect(body.fromLibrary.basedOnPrompt).toBe(PROMPT);
+    expect(body.fromLibrary.similarity).toBeCloseTo(1, 2);
+    expect(body.tiers).toHaveLength(3);
+    // No model work at all — instant serve short-circuits before clarify AND generate.
+    expect(fake.calls.generate).toBe(0);
+    expect(fake.calls.clarify).toBe(0);
+
+    const rec = lastTelemetry(lines);
+    expect(rec.outcome).toBe("library");
+    expect(rec.cacheHit).toBe(true);
+    expect(rec.costUsd).toBe(0);
 
     await app.close();
   });

@@ -21,6 +21,8 @@ export interface GenerateInput {
   answers?: string[];
   /** Cost ceiling for the call; defaults are applied by the provider (config). */
   opts?: GenerateOptions;
+  /** Optional "similar designs we've shipped" block from the learning network (retrieve.ts). */
+  exemplarsSection?: string;
 }
 
 export interface GroundingTelemetry {
@@ -40,6 +42,7 @@ export async function generateArchitecture(input: GenerateInput): Promise<Genera
     description: input.description,
     answers: input.answers,
     memory: input.memory,
+    exemplarsSection: input.exemplarsSection,
   });
 
   const { result: generated, usage } = await input.provider.generate(prompt, input.opts);

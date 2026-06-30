@@ -27,6 +27,8 @@ export interface GenerateRequest {
   answers?: string[];
   round?: number;
   turnstileToken?: string;
+  /** Force a fresh generation, bypassing the learning-network instant-serve. */
+  freshOnly?: boolean;
 }
 
 /** Discriminated union the UI switches on — never throws for HTTP/transport errors. */
@@ -42,6 +44,8 @@ export type ApiOutcome =
       recommendedTier: TierName;
       recommendationRationale: string;
       keyDecisions: KeyDecision[];
+      /** Set when the design was served from the learning network rather than freshly generated. */
+      fromLibrary?: { basedOnPrompt: string; similarity: number };
     }
   | { kind: "error"; status: number; code: string; message?: string };
 
@@ -102,6 +106,7 @@ export async function generate(
     recommendedTier: result.recommendedTier ?? tiers[0]?.name ?? "balanced",
     recommendationRationale: result.recommendationRationale ?? "",
     keyDecisions: result.keyDecisions ?? [],
+    fromLibrary: result.fromLibrary,
   };
 }
 

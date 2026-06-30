@@ -161,6 +161,7 @@ function Home(): JSX.Element {
           recommendedTier: outcome.recommendedTier,
           recommendationRationale: outcome.recommendationRationale,
           keyDecisions: outcome.keyDecisions,
+          fromLibrary: outcome.fromLibrary,
         };
         setResult(response);
         setSelectedTier(response.recommendedTier);
@@ -200,6 +201,7 @@ function Home(): JSX.Element {
     description: string,
     answers?: string[],
     round = 1,
+    freshOnly = false,
   ): Promise<void> => {
     setGoal(description);
     setPhase("loading");
@@ -207,7 +209,7 @@ function Home(): JSX.Element {
     setClarifyState(null);
     setErrorMessage("");
     setLastAttempt({ answers, round });
-    applyOutcome(await generate({ description, answers, round }), description);
+    applyOutcome(await generate({ description, answers, round, freshOnly }), description);
   };
 
   const handleSubmit = (e: React.FormEvent): void => {
@@ -406,17 +408,36 @@ function Home(): JSX.Element {
       )}
 
       {phase === "result" && result && (
-        <DesignResult
-          result={result}
-          selectedTier={selectedTier}
-          onSelectTier={setSelectedTier}
-          generationId={result.id}
-          feedback={{
-            rating: feedbackRating,
-            busy: feedbackBusy,
-            onRate: (r) => void submitResultFeedback(r),
-          }}
-        />
+        <>
+          {result.fromLibrary && (
+            <div className="from-library" role="status">
+              <p className="from-library__text">
+                Served instantly from our library — this closely matches a design we've already
+                worked through, so we reused it instead of regenerating.
+              </p>
+              <button
+                type="button"
+                className="from-library__fresh"
+                onClick={() =>
+                  void startGeneration(goal, lastAttempt.answers, lastAttempt.round, true)
+                }
+              >
+                Generate a fresh design instead →
+              </button>
+            </div>
+          )}
+          <DesignResult
+            result={result}
+            selectedTier={selectedTier}
+            onSelectTier={setSelectedTier}
+            generationId={result.id}
+            feedback={{
+              rating: feedbackRating,
+              busy: feedbackBusy,
+              onRate: (r) => void submitResultFeedback(r),
+            }}
+          />
+        </>
       )}
 
       <SiteFooter />

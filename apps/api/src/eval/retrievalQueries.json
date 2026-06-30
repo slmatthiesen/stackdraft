@@ -1,0 +1,28 @@
+{
+  "_comment": "Labeled retrieval eval set. target = corpus id a paraphrase SHOULD match; null = true negative (domain not in corpus, must NOT serve/ground). Hard pairs are intentional (paste-bin vs url-shortener; the two trading designs; self-host vs city-tool).",
+  "queries": [
+    { "target": "YotQu2CRb92_", "text": "A pastebin clone: people drop in some text and get back a short link to read it later. Mostly reads, light writes, public." },
+    { "target": "YotQu2CRb92_", "text": "Let users paste a snippet and share a URL that shows it. Low traffic, read-heavy, content is public." },
+    { "target": "url-shortener", "text": "A link shortener with an API to mint short codes and a very high-volume redirect endpoint." },
+    { "target": "url-shortener", "text": "Service that turns long URLs into short ones and handles huge redirect traffic on lookup." },
+    { "target": "8dLWD0KX1Tg0", "text": "A Linktree-style page builder: users sign up, make a public profile of links, and see click analytics." },
+    { "target": "8dLWD0KX1Tg0", "text": "Let creators build a public bio page listing their links with basic click stats. Low traffic at first." },
+    { "target": "photo-sharing-app", "text": "An image-sharing app where uploads are processed in the background for thumbnails and moderation." },
+    { "target": "photo-sharing-app", "text": "Users upload photos; we async-generate thumbnails and run content moderation on each." },
+    { "target": "realtime-chat-backend", "text": "A chat backend with persistent websockets, fan-out to rooms, and stored message history." },
+    { "target": "realtime-chat-backend", "text": "Realtime messaging: long-lived socket connections, broadcast to room members, persist messages." },
+    { "target": "e-commerce-checkout-api", "text": "A checkout API: cart, place order, charge via a third-party payment processor, decrement inventory." },
+    { "target": "e-commerce-checkout-api", "text": "Online store backend handling carts, orders, external payments, and stock updates." },
+    { "target": "notification-system", "text": "A notification service: a webhook receives an inbound event and fans out emails/SMS to users." },
+    { "target": "notification-system", "text": "Inbound webhook triggers notifications delivered across channels to many recipients." },
+    { "target": "qg7zz9UuLpPL", "text": "An endpoint that receives TradingView alerts and forwards the trade data onward, plus a public dashboard to view trades." },
+    { "target": "7uuam9-_SRkK", "text": "A stateful single-writer bridge that takes TradingView webhooks and places live orders on a broker via OAuth, with token refresh and a position gate." },
+    { "target": "self-hosting-a-stateful-web-app", "text": "Self-host one Node Fastify app in a single Docker container with SQLite on a cheap box." },
+    { "target": "b4ao9aRmoVwo", "text": "An SSR Next.js app with a Postgres+PostGIS database and a headless-Chromium render service, cost-optimized, scaling toward 1000 cities." },
+    { "target": null, "text": "A machine-learning training pipeline for fine-tuning large language models on GPU clusters." },
+    { "target": null, "text": "An IoT platform ingesting telemetry from millions of sensors with time-series storage." },
+    { "target": null, "text": "A video transcoding service that converts uploads into multiple streaming bitrates." },
+    { "target": null, "text": "A multiplayer game server with matchmaking, lobbies, and real-time leaderboards." },
+    { "target": null, "text": "A payroll system computing taxes and issuing direct-deposit payments on a schedule." }
+  ]
+}

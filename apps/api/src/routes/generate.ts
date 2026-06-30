@@ -26,6 +26,7 @@ import { llmCostUsd, provisionalLlmCostUsdFromConfig, reserveSpend } from "../gu
 import { runClarify, roundCapReached } from "../pipeline/clarify.js";
 import { assembleGrounding } from "../pipeline/ground.js";
 import { generateArchitecture } from "../pipeline/generate.js";
+import { retrieveSimilarDesigns, renderExemplars } from "../pipeline/retrieve.js";
 import { estimateCosts, trafficVolumeScale } from "../pipeline/cost.js";
 import { scrubAll, scrubObject, scrubPrompt } from "../pipeline/scrub.js";
 import { tagDesign } from "../pipeline/tags.js";
@@ -41,6 +42,8 @@ interface GenerateBody {
   answers?: string[];
   round?: number;
   turnstileToken?: string;
+  /** Skip the learning-network instant-serve and force a fresh generation ("generate fresh instead"). */
+  freshOnly?: boolean;
 }
 
 /**
@@ -57,6 +60,7 @@ const generateBodySchema = {
     answers: { type: "array", maxItems: 16, items: { type: "string" } },
     round: { type: "integer", minimum: 0, maximum: 8 },
     turnstileToken: { type: "string" },
+    freshOnly: { type: "boolean" },
   },
 } as const;
 
@@ -164,6 +168,32 @@ async function handleGenerate(
     return reply.code(200).send(JSON.parse(cached.body));
   }
 
+  // (2.5) Semantic learning network: RAG over our own APPROVED designs. A near-exact
+  // match is served verbatim ($0, no LLM, no cap — like a cache hit, but across SIMILAR
+  // prompts, not just identical ones); a weaker match becomes grounding exemplars for
+  // the generation below. Fully non-fatal: any failure degrades to a normal generation.
+  const retrieval = await retrieveSimilarDesigns({
+    embedder: ctx.embedder,
+    stores: ctx.stores,
+    config: ctx.config,
+    description,
+    answers,
+  });
+  if (retrieval.instant && !body.freshOnly) {
+    const lib = retrieval.instant;
+    const responseBody = {
+      ...lib.body,
+      id: lib.id,
+      fromLibrary: {
+        basedOnPrompt: lib.prompt,
+        similarity: Number(retrieval.topSimilarity.toFixed(3)),
+      },
+    };
+    emit("library", { cacheHit: true, costUsd: 0 });
+    return reply.code(200).send(responseBody);
+  }
+  const exemplarsSection = renderExemplars(retrieval.exemplars);
+
   // (3) Clarification gate (R2). Below the cap we may ask; once the cap is reached we
   // force generation regardless of whether the model still wants to clarify.
   if (!roundCapReached(round)) {
@@ -227,6 +257,7 @@ async function handleGenerate(
       description,
       answers,
       opts: { maxTokens: ctx.config.LLM_MAX_TOKENS, effort: ctx.config.LLM_EFFORT },
+      exemplarsSection,
     });
     addUsage(generated.usage);
 

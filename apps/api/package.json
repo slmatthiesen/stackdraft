@@ -16,7 +16,8 @@
     "refresh-pricing": "tsx jobs/refreshPricing.ts",
     "seed-curated": "tsx scripts/seedCurated.ts",
     "eval": "tsx src/eval/runner.ts",
-    "eval:haiku": "tsx src/eval/haikuReview.ts"
+    "eval:haiku": "tsx src/eval/haikuReview.ts",
+    "eval:retrieval": "tsx src/eval/retrievalCalibration.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

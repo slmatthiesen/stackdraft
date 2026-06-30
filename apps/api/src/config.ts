@@ -51,6 +51,29 @@ const ConfigSchema = z.object({
   LLM_PRICE_CACHE_WRITE_PER_MTOK: z.coerce.number().nonnegative().default(3.75),
   LLM_PRICE_CACHE_READ_PER_MTOK: z.coerce.number().nonnegative().default(0.3),
 
+  // Semantic learning network (RAG over our own approved designs). Embeddings are
+  // provider-abstracted (EmbeddingProvider) — Voyage by default; "none" disables
+  // retrieval entirely (the generate path still works, just without instant-serve
+  // or semantic grounding). Forker-safe: a clone with no VOYAGE_API_KEY degrades to
+  // "none" at boot rather than failing — the learning network is an enhancement, not
+  // a hard dependency.
+  EMBEDDING_PROVIDER: z.enum(["voyage", "none"]).default("voyage"),
+  VOYAGE_API_KEY: z.string().optional(),
+  VOYAGE_BASE_URL: z.string().default("https://api.voyageai.com/v1"),
+  EMBEDDING_MODEL: z.string().default("voyage-3-lite"),
+  // Cosine ≥ RETURN → serve the nearest approved design verbatim (re-costed), $0 +
+  // instant. GROUND ≤ cosine < RETURN → inject the nearest designs as exemplars into
+  // the generation prompt (faster convergence, more consistent).
+  // Defaults CALIBRATED against scripts/eval/retrievalEval.ts on voyage-3-lite: a
+  // labeled paraphrase/negative set ranks top-1 at 100%, with true matches ~0.78 and
+  // the unrelated noise floor ~0.52 (max 0.68). GROUND 0.70 → precision 1.0 / recall
+  // 0.94 (no noise fires); RETURN 0.80 sits a clear margin above the noise floor so
+  // only near-identical prompts short-circuit (and top-1 accuracy means they're the
+  // right design). Re-run the eval after the corpus grows or the embed model changes.
+  SEMANTIC_RETURN_THRESHOLD: z.coerce.number().min(0).max(1).default(0.8),
+  SEMANTIC_GROUND_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
+  SEMANTIC_GROUND_TOPK: z.coerce.number().int().positive().default(2),
+
   // Region / pricing
   DEFAULT_REGION: z.string().default("us-east-1"),
   PRICING_REFRESH_CRON: z.string().default("0 3 1 * *"),
