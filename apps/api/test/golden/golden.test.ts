@@ -27,6 +27,8 @@ import {
   datastoreMatchesDecision,
   graphHasNoDanglingEdges,
   primaryDatastoreReachable,
+  graphHasNoOrphanNodes,
+  readPathWhenUiImplied,
 } from "./properties.js";
 
 const PASS_RATE_FLOOR = 0.9;
@@ -54,16 +56,20 @@ describe("property checkers on the known-good result", () => {
       datastoreMatchesDecision,
       graphHasNoDanglingEdges,
       primaryDatastoreReachable,
+      graphHasNoOrphanNodes,
+      readPathWhenUiImplied,
     ]) {
       const r = property(good);
       expect(r.ok, `${r.name}: ${r.reason}`).toBe(true);
     }
   });
 
-  it("the aggregator reports ok with all twelve properties green", () => {
+  it("the aggregator reports ok with all thirteen gated properties green", () => {
     const agg = runAllProperties(good);
     expect(agg.ok).toBe(true);
-    expect(agg.results).toHaveLength(12);
+    // readPathWhenUiImplied is warn-only (not in ALL_PROPERTIES yet), so the gate
+    // holds thirteen, not the fourteen exported checkers.
+    expect(agg.results).toHaveLength(13);
     expect(agg.results.every((r) => r.ok)).toBe(true);
   });
 });
@@ -81,6 +87,37 @@ describe("completeness critic flips to FAIL on a structurally-broken graph", () 
     broken.tiers[0]!.nodes.push({ id: "orphan_db", awsService: "DynamoDB", role: "unwired store", security: ["KMS at rest"] });
     expect(primaryDatastoreReachable(broken).ok).toBe(false);
     expect(primaryDatastoreReachable(goodArchitecture()).ok).toBe(true);
+  });
+
+  it("graphHasNoOrphanNodes fails on an unwired active node but exempts an S3 asset sink", () => {
+    const broken = structuredClone(goodArchitecture());
+    // An always-on compute node the delta forgot to wire — a real orphan.
+    broken.tiers[0]!.nodes.push({ id: "orphan_fn", awsService: "Lambda", role: "stray worker", security: ["least-priv role"] });
+    expect(graphHasNoOrphanNodes(broken).ok).toBe(false);
+    expect(graphHasNoOrphanNodes(goodArchitecture()).ok).toBe(true);
+
+    // A passive S3 sink with no edge is NOT an orphan (asset/audit destination).
+    const withSink = structuredClone(goodArchitecture());
+    withSink.tiers[0]!.nodes.push({ id: "audit", awsService: "S3", role: "access-log sink", security: ["block public access"] });
+    expect(graphHasNoOrphanNodes(withSink).ok).toBe(true);
+  });
+
+  it("isolates the defect: only graphHasNoOrphanNodes fails on an orphaned active node", () => {
+    const broken = structuredClone(goodArchitecture());
+    broken.tiers[0]!.nodes.push({ id: "orphan_fn", awsService: "Lambda", role: "stray worker", security: ["least-priv role"] });
+    const failing = runAllProperties(broken).results.filter((r) => !r.ok).map((r) => r.name);
+    expect(failing).toEqual(["graphHasNoOrphanNodes"]);
+  });
+
+  it("readPathWhenUiImplied (warn-only) fails when a UI tier's datastore has no compute neighbor", () => {
+    const broken = structuredClone(goodArchitecture());
+    // Drop the fn→db edge so the DynamoDB store is wired only to nothing-compute.
+    const t = broken.tiers[0]!;
+    t.edges = t.edges.filter((e) => !(e.from === "fn" && e.to === "db"));
+    // Wire db to a non-compute node so it isn't ALSO a primaryDatastoreReachable failure.
+    t.edges.push({ from: "db", to: "assets", payload: "export", protocol: "HTTPS" });
+    expect(readPathWhenUiImplied(broken).ok).toBe(false);
+    expect(readPathWhenUiImplied(goodArchitecture()).ok).toBe(true);
   });
 });
 

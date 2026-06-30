@@ -206,6 +206,14 @@ export function incoherentComputeArchitecture(): ArchitectureResult {
       ),
       { id: "alb", awsService: "ALB", role: "load balancer", security: ["TLS", "WAF"] },
     ],
+    // Wire the ALB in front of the EC2 (front door → ALB → API server) so the ONLY
+    // broken invariant stays compute↔decision coherence — an unwired ALB would be a
+    // second, unintended defect (now caught by graphHasNoOrphanNodes).
+    edges: [
+      ...tier.edges,
+      { from: "api", to: "alb", payload: "Forwarded HTTP request", protocol: "HTTPS" },
+      { from: "alb", to: "fn", payload: "Load-balanced request", protocol: "HTTPS" },
+    ],
   });
   return { ...base, tiers: base.tiers.map(breakCompute) };
 }

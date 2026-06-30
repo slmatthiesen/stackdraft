@@ -32,7 +32,9 @@ export type PropertyName =
   | "computeMatchesDecision"
   | "datastoreMatchesDecision"
   | "graphHasNoDanglingEdges"
-  | "primaryDatastoreReachable";
+  | "primaryDatastoreReachable"
+  | "graphHasNoOrphanNodes"
+  | "readPathWhenUiImplied";
 
 export interface PropertyResult {
   name: PropertyName;
@@ -585,6 +587,103 @@ export const primaryDatastoreReachable: Property = (result) => {
   };
 };
 
+// An unwired node is usually a bug (a delta added it but never connected it), but a
+// few service kinds are LEGITIMATELY edgeless sinks: passive asset stores and the
+// audit/log destinations the security floor requires (S3 assets, CloudWatch Logs,
+// CloudTrail, Config). Exempt those — mirroring why primaryDatastoreReachable skips
+// S3 — so the check fires only on genuinely-orphaned active nodes (a stray compute,
+// queue, or primary datastore left dangling).
+const ORPHAN_EXEMPT_KEYWORDS = [
+  "s3", "cloudwatch logs", "cloudwatch log", "cloudtrail", "aws config", "log group",
+  "access log", "audit", "flow log",
+] as const;
+
+function isOrphanExempt(awsService: string, role: string): boolean {
+  const s = `${awsService} ${role}`.toLowerCase();
+  return ORPHAN_EXEMPT_KEYWORDS.some((kw) => s.includes(kw));
+}
+
+/** Every node must participate in at least one edge — an unwired active node is
+ *  the canonical failure mode of a tier-delta that ADDS a node but never wires it.
+ *  Passive asset/audit-log sinks (S3, CloudWatch Logs, CloudTrail) are exempt: they
+ *  are legitimately edgeless in the graph, same exclusion primaryDatastoreReachable
+ *  makes for S3. */
+export const graphHasNoOrphanNodes: Property = (result) => {
+  const offenders: string[] = [];
+  for (const tier of result.tiers) {
+    const wired = new Set<string>();
+    for (const e of tier.edges) {
+      wired.add(e.from);
+      wired.add(e.to);
+    }
+    for (const n of tier.nodes) {
+      if (!wired.has(n.id) && !isOrphanExempt(n.awsService, n.role)) {
+        offenders.push(`${tier.name}: node '${n.id}' (${n.awsService}) has no edge`);
+      }
+    }
+  }
+  return {
+    name: "graphHasNoOrphanNodes",
+    ok: offenders.length === 0,
+    reason: offenders.length === 0 ? "every active node is wired into the graph" : offenders.join("; "),
+  };
+};
+
+// A UI-implying node means the design serves user-facing reads, so a primary
+// datastore must be REACHABLE from the client through compute — data the page shows
+// can't be floating off an edge the client can't traverse. Detection is from the
+// GRAPH (the result carries no description): a CDN / static-site / dashboard / web
+// front-end node implies a UI.
+const UI_NODE_KEYWORDS = [
+  "cloudfront", "cdn", "dashboard", "frontend", "front-end", "front end",
+  "static site", "static website", "web app", "spa", "amplify",
+] as const;
+
+const COMPUTE_NODE_KEYWORDS = [
+  "lambda", "ec2", "fargate", "ecs", "eks", "api gateway", "appsync",
+  "app runner", "elastic beanstalk",
+] as const;
+
+function matchesAny(awsService: string, role: string, kws: readonly string[]): boolean {
+  const s = `${awsService} ${role}`.toLowerCase();
+  return kws.some((kw) => s.includes(kw));
+}
+
+/** WARN-ONLY (not yet in ALL_PROPERTIES): when a tier has both a UI-implying node
+ *  and a primary datastore, there should be a read path client → compute → datastore
+ *  so the front-end can actually fetch what it displays. Lenient by design — it only
+ *  fires when a datastore exists with NO compute neighbor at all (the clear
+ *  "unreadable store behind a UI" case), to avoid false-fails on indirect paths
+ *  while we validate it against the golden set before promoting it to a hard gate. */
+export const readPathWhenUiImplied: Property = (result) => {
+  const offenders: string[] = [];
+  for (const tier of result.tiers) {
+    const hasUi = tier.nodes.some((n) => matchesAny(n.awsService, n.role, UI_NODE_KEYWORDS));
+    if (!hasUi) continue;
+
+    const computeIds = new Set(
+      tier.nodes.filter((n) => matchesAny(n.awsService, n.role, COMPUTE_NODE_KEYWORDS)).map((n) => n.id),
+    );
+    const neighbors = new Map<string, Set<string>>();
+    for (const e of tier.edges) {
+      (neighbors.get(e.from) ?? neighbors.set(e.from, new Set()).get(e.from)!).add(e.to);
+      (neighbors.get(e.to) ?? neighbors.set(e.to, new Set()).get(e.to)!).add(e.from);
+    }
+    for (const n of tier.nodes) {
+      if (!isPrimaryDatastore(n.awsService, n.role)) continue;
+      const touchesCompute = [...(neighbors.get(n.id) ?? [])].some((id) => computeIds.has(id));
+      if (!touchesCompute) {
+        offenders.push(`${tier.name}: datastore '${n.id}' has no compute neighbor but the tier serves a UI`);
+      }
+    }
+  }
+  return {
+    name: "readPathWhenUiImplied",
+    ok: offenders.length === 0,
+    reason: offenders.length === 0 ? "UI-facing tiers reach their datastore through compute" : offenders.join("; "),
+  };
+};
+
 export const ALL_PROPERTIES: readonly Property[] = [
   exactlyThreeTiers,
   securityFloorCoversAllBaselines,
@@ -598,6 +697,10 @@ export const ALL_PROPERTIES: readonly Property[] = [
   datastoreMatchesDecision,
   graphHasNoDanglingEdges,
   primaryDatastoreReachable,
+  graphHasNoOrphanNodes,
+  // readPathWhenUiImplied is intentionally NOT in the gate yet — it ships warn-only
+  // (exported + tested) until validated against the 30-prompt golden set, so a
+  // false-fail can't block a launch-blocking gate on day one.
 ];
 
 export interface AggregateResult {
