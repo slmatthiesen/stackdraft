@@ -15,7 +15,7 @@
 import type { z } from "zod";
 
 import type { Config } from "../config.js";
-import { GeneratedArchitectureSchema, ClarificationSchema } from "../schema/architecture.js";
+import { GeneratedWireSchema, ClarificationSchema, reconstructTiers } from "../schema/architecture.js";
 import type { GeneratedArchitecture, Clarification, GeneratedTier } from "../schema/architecture.js";
 import { architectureToolSchema, clarificationToolSchema } from "./schema-utils.js";
 import { ProviderError } from "./provider.js";
@@ -150,7 +150,9 @@ export class GlmProvider implements LlmProvider {
     opts?: GenerateOptions,
   ): Promise<ProviderResult<GeneratedArchitecture>> {
     const maxTokens = opts?.maxTokens ?? this.settings.maxTokens;
-    return this.structuredCall(
+    // The model emits the tier-delta WIRE shape; reconstruct full tiers here so
+    // callers always receive a complete GeneratedArchitecture.
+    const { result: wire, usage } = await this.structuredCall(
       {
         model: this.settings.model,
         max_tokens: maxTokens,
@@ -162,8 +164,9 @@ export class GlmProvider implements LlmProvider {
         tool_choice: { type: "function", function: { name: ARCHITECTURE_FN.function.name } },
         thinking: THINKING_OFF,
       },
-      GeneratedArchitectureSchema,
+      GeneratedWireSchema,
     );
+    return { result: reconstructTiers(wire), usage };
   }
 
   async clarify(description: string, priorAnswers?: string[]): Promise<ProviderResult<Clarification>> {

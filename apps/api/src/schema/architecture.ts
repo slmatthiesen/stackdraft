@@ -117,24 +117,74 @@ export const GeneratedTierSchema = z
     tradeoffs: z.array(z.string()).describe("Trade-offs versus the other two tiers (R3)."),
   });
 
-const generatedShape = {
+// TIER-DELTA EMISSION — the main output-token lever. Only the BUDGET tier emits a
+// full graph; balanced and resilient emit only what CHANGES vs the tier below.
+// Measured over real designs: ~43% of nodes and ~50% of edges were re-emitted
+// verbatim per tier. `reconstructTiers` rebuilds the three FULL tiers
+// deterministically before any downstream step, so cost / properties / web see the
+// exact same shape they did when the model emitted three full tiers.
+export const EdgeRefSchema = z.object({
+  from: z.string().describe("Source node id of the edge to remove."),
+  to: z.string().describe("Destination node id of the edge to remove."),
+});
+
+export const GeneratedTierDeltaSchema = z.object({
+  name: z.enum(TIER_NAMES),
+  summary: z.string(),
+  addNodes: z
+    .array(NodeSchema)
+    .describe("Nodes NEW in this tier, OR existing nodes re-stated IN FULL because they changed (upsert by id). Do NOT repeat unchanged nodes."),
+  removeNodeIds: z
+    .array(z.string())
+    .describe("Ids of nodes from the tier below that this tier drops (usually empty — tiers grow upward)."),
+  addEdges: z
+    .array(EdgeSchema)
+    .describe("Edges NEW in this tier, or changed edges re-stated (upsert by from+to). Do NOT repeat unchanged edges."),
+  removeEdges: z
+    .array(EdgeRefSchema)
+    .describe("Edges from the tier below that this tier drops (usually empty)."),
+  delta: z
+    .array(z.string())
+    .describe("What THIS tier adds/changes vs the tier below (one short line each)."),
+  tradeoffs: z.array(z.string()).describe("Trade-offs versus the other two tiers."),
+});
+
+// Fields shared between the WIRE schema (what the model emits) and the assembled
+// RESULT. The two diverge only on how the tiers are represented (deltas vs full).
+const commonGeneratedShape = {
   assumptions: z.array(z.string()),
   clarificationsUsed: z.array(z.string()),
-  tiers: z.array(GeneratedTierSchema).length(3).describe("Exactly three tiers: budget, balanced, resilient."),
   keyDecisions: z
     .array(KeyDecisionSchema)
     .describe("The handful of load-bearing decisions: chosen vs alternatives + why, framed through the WAF pillars."),
 } as const;
 
-/** What the LLM returns — everything EXCEPT the deterministic security floor. */
-export const GeneratedArchitectureSchema = z.object(generatedShape);
+/** THE WIRE SHAPE the LLM emits: the budget tier in FULL + the other two as DELTAS.
+ *  This is what the forced-tool schema constrains. The provider validates against it
+ *  then reconstructs to the full `GeneratedArchitecture` — so the wire format is an
+ *  internal provider detail and downstream code never sees deltas. */
+export const GeneratedWireSchema = z.object({
+  ...commonGeneratedShape,
+  baseTier: GeneratedTierSchema.describe("The BUDGET tier as a FULL graph — the baseline the other two tiers build on."),
+  tierDeltas: z
+    .array(GeneratedTierDeltaSchema)
+    .length(2)
+    .describe("Exactly two: balanced then resilient, EACH as a delta vs the tier below it."),
+});
 
-/** The full result the backend assembles: generated graph + injected security floor
- *  and computed cost drivers. `tiers` is overridden to the FULL `TierSchema` (with
+/** What downstream code consumes: three FULL tiers (no security floor yet — injected
+ *  later). The provider produces this from the wire shape via `reconstructTiers`. */
+export const GeneratedArchitectureSchema = z.object({
+  ...commonGeneratedShape,
+  tiers: z.array(GeneratedTierSchema).length(3).describe("Exactly three tiers: budget, balanced, resilient."),
+});
+
+/** The full result the backend assembles: reconstructed graph + injected security
+ *  floor and computed cost drivers. `tiers` is the FULL `TierSchema` (with
  *  costDrivers) since `estimateCosts` fills them deterministically. */
 export const ArchitectureResultSchema = z
   .object({
-    ...generatedShape,
+    ...commonGeneratedShape,
     tiers: z
       .array(TierSchema)
       .length(3)
@@ -159,10 +209,48 @@ export type ArchitectureEdge = z.infer<typeof EdgeSchema>;
 export type CostDriver = z.infer<typeof CostDriverSchema>;
 export type Tier = z.infer<typeof TierSchema>;
 export type GeneratedTier = z.infer<typeof GeneratedTierSchema>;
+export type GeneratedTierDelta = z.infer<typeof GeneratedTierDeltaSchema>;
 export type KeyDecision = z.infer<typeof KeyDecisionSchema>;
+export type GeneratedWire = z.infer<typeof GeneratedWireSchema>;
 export type GeneratedArchitecture = z.infer<typeof GeneratedArchitectureSchema>;
 export type ArchitectureResult = z.infer<typeof ArchitectureResultSchema>;
-/** The generated graph + injected security floor, BEFORE the deterministic cost
+
+const edgeKey = (e: { from: string; to: string }): string => `${e.from} ${e.to}`;
+
+/** Apply one tier's delta to the (full) tier below it: drop removed nodes/edges,
+ *  then upsert added/changed ones (by node id / by edge endpoints). */
+function applyTierDelta(prev: GeneratedTier, d: GeneratedTierDelta): GeneratedTier {
+  const removeNode = new Set(d.removeNodeIds);
+  const nodes = new Map(prev.nodes.filter((n) => !removeNode.has(n.id)).map((n) => [n.id, n] as const));
+  for (const n of d.addNodes) nodes.set(n.id, n); // new id → add; existing id → replace
+  const removeEdge = new Set(d.removeEdges.map(edgeKey));
+  const edges = new Map(prev.edges.filter((e) => !removeEdge.has(edgeKey(e))).map((e) => [edgeKey(e), e] as const));
+  for (const e of d.addEdges) edges.set(edgeKey(e), e);
+  return {
+    name: d.name,
+    summary: d.summary,
+    nodes: [...nodes.values()],
+    edges: [...edges.values()],
+    delta: d.delta,
+    tradeoffs: d.tradeoffs,
+  };
+}
+
+/** Rebuild three FULL tiers from the budget baseline + the two structured deltas —
+ *  the deterministic inverse of the model's delta emission. Pure. Providers call
+ *  this so callers always receive the full {@link GeneratedArchitecture}. */
+export function reconstructTiers(wire: GeneratedWire): GeneratedArchitecture {
+  const tiers: GeneratedTier[] = [wire.baseTier];
+  for (const d of wire.tierDeltas) tiers.push(applyTierDelta(tiers[tiers.length - 1]!, d));
+  return {
+    assumptions: wire.assumptions,
+    clarificationsUsed: wire.clarificationsUsed,
+    tiers,
+    keyDecisions: wire.keyDecisions,
+  };
+}
+
+/** The reconstructed graph + injected security floor, BEFORE the deterministic cost
  *  drivers are computed. `generateArchitecture` returns this; `estimateCosts`
  *  fills `costDrivers` on each tier to produce a full {@link ArchitectureResult}. */
 export type ArchitectureBeforeCost = GeneratedArchitecture & {
@@ -180,11 +268,12 @@ export const ClarificationSchema = z
 
 export type Clarification = z.infer<typeof ClarificationSchema>;
 
-/** JSON Schema for `output_config.format` (structured generation). Uses the
- *  GENERATED schema (no securityFloor) — the floor is injected deterministically. */
+/** JSON Schema for the forced-tool / structured generation. Uses the WIRE schema
+ *  (budget full + two deltas, no securityFloor) — the model emits deltas, the floor
+ *  is injected and the tiers reconstructed deterministically downstream. */
 export function architectureJsonSchema(): Record<string, unknown> {
-  return zodToJsonSchema(GeneratedArchitectureSchema, {
-    name: "GeneratedArchitecture",
+  return zodToJsonSchema(GeneratedWireSchema, {
+    name: "GeneratedArchitectureWire",
     target: "jsonSchema7",
     $refStrategy: "none",
   }) as Record<string, unknown>;

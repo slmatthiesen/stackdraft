@@ -2,7 +2,7 @@ import Anthropic, { APIConnectionError, APIError, RateLimitError } from "@anthro
 import type { z } from "zod";
 
 import type { Config } from "../config.js";
-import { GeneratedArchitectureSchema, ClarificationSchema } from "../schema/architecture.js";
+import { GeneratedWireSchema, ClarificationSchema, reconstructTiers } from "../schema/architecture.js";
 import type { GeneratedArchitecture, Clarification, GeneratedTier } from "../schema/architecture.js";
 import { architectureToolSchema, clarificationToolSchema } from "./schema-utils.js";
 import { ProviderError } from "./provider.js";
@@ -132,7 +132,10 @@ export class ClaudeProvider implements LlmProvider {
       tool_choice: { type: "tool", name: ARCHITECTURE_TOOL.name },
     };
 
-    return this.structuredCall(params, GeneratedArchitectureSchema);
+    // The model emits the tier-delta WIRE shape; reconstruct the full three tiers
+    // here so callers always receive a complete GeneratedArchitecture.
+    const { result: wire, usage } = await this.structuredCall(params, GeneratedWireSchema);
+    return { result: reconstructTiers(wire), usage };
   }
 
   async clarify(

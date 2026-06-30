@@ -9,7 +9,7 @@ import { ClaudeProvider } from "./claude.js";
 import { ProviderError } from "./provider.js";
 import type { GroundedPrompt } from "./provider.js";
 import { GeneratedArchitectureSchema } from "../schema/architecture.js";
-import type { GeneratedArchitecture, Clarification, TierName } from "../schema/architecture.js";
+import type { GeneratedArchitecture, GeneratedWire, Clarification, TierName } from "../schema/architecture.js";
 
 // --- Test doubles -----------------------------------------------------------
 
@@ -129,13 +129,40 @@ function validArchitecture(): GeneratedArchitecture {
   };
 }
 
+// The model emits the tier-delta WIRE shape (budget full + two deltas). These
+// no-op deltas reconstruct EXACTLY to validArchitecture()'s three tiers, so the
+// provider's reconstructed result equals validArchitecture().
+function makeDelta(name: TierName): GeneratedWire["tierDeltas"][number] {
+  return {
+    name,
+    summary: `${name} tier`,
+    addNodes: [],
+    removeNodeIds: [],
+    addEdges: [],
+    removeEdges: [],
+    delta: ["baseline: single-AZ, throttling absorbs bursts"],
+    tradeoffs: ["Cheaper than resilient"],
+  };
+}
+
+function validWire(): GeneratedWire {
+  const arch = validArchitecture();
+  return {
+    assumptions: arch.assumptions,
+    clarificationsUsed: arch.clarificationsUsed,
+    baseTier: makeTier("budget"),
+    tierDeltas: [makeDelta("balanced"), makeDelta("resilient")],
+    keyDecisions: arch.keyDecisions,
+  };
+}
+
 // --- Tests ------------------------------------------------------------------
 
 describe("ClaudeProvider.generate", () => {
   it("returns a schema-valid ArchitectureResult for a representative prompt", async () => {
     const arch = validArchitecture();
     const { client, create } = fakeClient();
-    create.mockResolvedValueOnce(toolMessage(arch, { input_tokens: 1200, output_tokens: 800 }));
+    create.mockResolvedValueOnce(toolMessage(validWire(), { input_tokens: 1200, output_tokens: 800 }));
 
     const { result, usage } = await makeProvider(client).generate(PROMPT);
 
@@ -148,7 +175,7 @@ describe("ClaudeProvider.generate", () => {
 
   it("places the cache breakpoint ONLY on the static prefix (KTD11)", async () => {
     const { client, create } = fakeClient();
-    create.mockResolvedValueOnce(toolMessage(validArchitecture()));
+    create.mockResolvedValueOnce(toolMessage(validWire()));
 
     await makeProvider(client).generate(PROMPT);
 
@@ -191,7 +218,7 @@ describe("ClaudeProvider.generate", () => {
 
   it("uses forced tool use on Haiku too (no output_config / effort on the wire)", async () => {
     const { client, create } = fakeClient();
-    create.mockResolvedValueOnce(toolMessage(validArchitecture()));
+    create.mockResolvedValueOnce(toolMessage(validWire()));
 
     const haiku = new ClaudeProvider(client, { model: "claude-haiku-4-5", maxTokens: 8000, effort: "low" });
     await haiku.generate(PROMPT);
@@ -205,7 +232,7 @@ describe("ClaudeProvider.generate", () => {
   it("propagates cache-token usage so the caller can debit the ledger", async () => {
     const { client, create } = fakeClient();
     create.mockResolvedValueOnce(
-      toolMessage(validArchitecture(), {
+      toolMessage(validWire(), {
         input_tokens: 300,
         output_tokens: 900,
         cache_read_input_tokens: 4096,
@@ -227,7 +254,7 @@ describe("ClaudeProvider.generate", () => {
     const { client, create } = fakeClient();
     create
       .mockResolvedValueOnce(toolMessage({ not: "valid" }))
-      .mockResolvedValueOnce(toolMessage(validArchitecture()));
+      .mockResolvedValueOnce(toolMessage(validWire()));
 
     const { result } = await makeProvider(client).generate(PROMPT);
 

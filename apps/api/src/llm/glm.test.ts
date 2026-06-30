@@ -4,7 +4,7 @@ import { GlmProvider } from "./glm.js";
 import { ProviderError } from "./provider.js";
 import type { GroundedPrompt } from "./provider.js";
 import { GeneratedArchitectureSchema } from "../schema/architecture.js";
-import type { GeneratedArchitecture, Clarification, TierName } from "../schema/architecture.js";
+import type { GeneratedArchitecture, GeneratedWire, Clarification, TierName } from "../schema/architecture.js";
 
 // --- Test doubles -----------------------------------------------------------
 
@@ -92,13 +92,36 @@ function validArchitecture(): GeneratedArchitecture {
   };
 }
 
+// The model emits the tier-delta WIRE shape; these no-op deltas reconstruct EXACTLY
+// to validArchitecture()'s three tiers (the provider reconstructs before returning).
+function validWire(): GeneratedWire {
+  const arch = validArchitecture();
+  const delta = (name: TierName): GeneratedWire["tierDeltas"][number] => ({
+    name,
+    summary: `${name} tier`,
+    addNodes: [],
+    removeNodeIds: [],
+    addEdges: [],
+    removeEdges: [],
+    delta: ["baseline: single-AZ"],
+    tradeoffs: ["Cheaper than resilient"],
+  });
+  return {
+    assumptions: arch.assumptions,
+    clarificationsUsed: arch.clarificationsUsed,
+    baseTier: makeTier("budget"),
+    tierDeltas: [delta("balanced"), delta("resilient")],
+    keyDecisions: arch.keyDecisions,
+  };
+}
+
 // --- Tests ------------------------------------------------------------------
 
 describe("GlmProvider.generate", () => {
   it("returns a schema-valid ArchitectureResult for a representative prompt", async () => {
     const arch = validArchitecture();
     const fetchMock = vi.fn();
-    fetchMock.mockResolvedValueOnce(okResponse(glmToolResponse(arch, { prompt_tokens: 1200, completion_tokens: 800 })));
+    fetchMock.mockResolvedValueOnce(okResponse(glmToolResponse(validWire(), { prompt_tokens: 1200, completion_tokens: 800 })));
 
     const { result, usage } = await makeProvider(fetchMock).generate(PROMPT);
 
@@ -112,7 +135,7 @@ describe("GlmProvider.generate", () => {
 
   it("sends a FORCED function call with system+user messages from the grounded prompt", async () => {
     const fetchMock = vi.fn();
-    fetchMock.mockResolvedValueOnce(okResponse(glmToolResponse(validArchitecture())));
+    fetchMock.mockResolvedValueOnce(okResponse(glmToolResponse(validWire())));
 
     await makeProvider(fetchMock).generate(PROMPT);
 
@@ -139,7 +162,7 @@ describe("GlmProvider.generate", () => {
     const fetchMock = vi.fn();
     fetchMock
       .mockResolvedValueOnce(okResponse(glmToolResponse({ not: "valid" })))
-      .mockResolvedValueOnce(okResponse(glmToolResponse(validArchitecture())));
+      .mockResolvedValueOnce(okResponse(glmToolResponse(validWire())));
 
     const { result } = await makeProvider(fetchMock).generate(PROMPT);
 
