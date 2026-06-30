@@ -29,6 +29,7 @@ import {
   primaryDatastoreReachable,
   graphHasNoOrphanNodes,
   readPathWhenUiImplied,
+  budgetTierIsCostHonest,
 } from "./properties.js";
 
 const PASS_RATE_FLOOR = 0.9;
@@ -118,6 +119,21 @@ describe("completeness critic flips to FAIL on a structurally-broken graph", () 
     t.edges.push({ from: "db", to: "assets", payload: "export", protocol: "HTTPS" });
     expect(readPathWhenUiImplied(broken).ok).toBe(false);
     expect(readPathWhenUiImplied(goodArchitecture()).ok).toBe(true);
+  });
+
+  it("budgetTierIsCostHonest (warn-only) passes serverless, fails the always-on managed stack", () => {
+    // The serverless good fixture floors at $0 — cost-honest.
+    expect(budgetTierIsCostHonest(goodArchitecture()).ok).toBe(true);
+    // Stack the always-on managed quartet onto the budget tier → bloat.
+    const bloated = structuredClone(goodArchitecture());
+    bloated.tiers[0]!.costDrivers.push(
+      { service: "NAT Gateway", unit: "$/hr", estimateRange: "$32.85–$65.70/mo", note: "" },
+      { service: "Application Load Balancer", unit: "$/hr", estimateRange: "$16.43–$32.85/mo", note: "" },
+      { service: "RDS PostgreSQL", unit: "$/hr", estimateRange: "$11.68–$23.36/mo", note: "" },
+    );
+    const r = budgetTierIsCostHonest(bloated);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain("managed split belongs in Balanced");
   });
 });
 

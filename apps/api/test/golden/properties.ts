@@ -18,6 +18,7 @@ import type { SecurityBaseline } from "@drafture/kb";
 import { TIER_NAMES } from "../../src/schema/architecture.js";
 import type { ArchitectureResult, Tier } from "../../src/schema/architecture.js";
 import { graphHasNoDanglingEdges, primaryDatastoreReachable, isPrimaryDatastore } from "../../src/pipeline/completeness.js";
+import { budgetIdleFloor } from "../../src/pipeline/costFloor.js";
 // Re-export so the golden test (and any caller) keeps importing them from here.
 export { graphHasNoDanglingEdges, primaryDatastoreReachable };
 
@@ -37,7 +38,8 @@ export type PropertyName =
   | "graphHasNoDanglingEdges"
   | "primaryDatastoreReachable"
   | "graphHasNoOrphanNodes"
-  | "readPathWhenUiImplied";
+  | "readPathWhenUiImplied"
+  | "budgetTierIsCostHonest";
 
 export interface PropertyResult {
   name: PropertyName;
@@ -642,6 +644,35 @@ export const readPathWhenUiImplied: Property = (result) => {
   };
 };
 
+// --- Cost-honest Budget (docs/plans/2026-06-29-003) -------------------------
+//
+// Budget = cheapest CORRECT, so its IDLE FLOOR (what it bills at zero traffic) must
+// be lean: serverless-first (~$0), or a single justified store / one box. The
+// failure mode we measured: Budget reaching for the always-on managed quartet
+// (NAT + ALB + Fargate + RDS, sometimes +ElastiCache) and quoting a cost-conscious
+// user $100+/mo idle — which the structural gate happily certifies. Calibrated on
+// real designs: serverless ones floor at $0 / 0 always-on services; bloated ones at
+// $100+ / 4–5. A single PostGIS store (~$12 / 1 service) or one box (1) sits far
+// below. So: flag ≥3 stacked always-on services OR a >$50/mo floor.
+//
+// WARN-ONLY for now (not in ALL_PROPERTIES): the fix is the generation POSTURE
+// (serverless-first prompt/KB); this gate MEASURES it and guards against regression.
+// Promote to a hard gate once the posture change lands and the golden set is green.
+const BUDGET_FLOOR_MAX_USD = 50;
+const BUDGET_MAX_ALWAYS_ON_SERVICES = 2;
+
+export const budgetTierIsCostHonest: Property = (result) => {
+  const floor = budgetIdleFloor(result);
+  const bloated = floor.services.length > BUDGET_MAX_ALWAYS_ON_SERVICES || floor.usd > BUDGET_FLOOR_MAX_USD;
+  return {
+    name: "budgetTierIsCostHonest",
+    ok: !bloated,
+    reason: bloated
+      ? `budget idle floor $${floor.usd}/mo across ${floor.services.length} always-on services [${floor.services.join(", ")}] — Budget should be serverless-first or a single box; the managed split belongs in Balanced+`
+      : `budget idle floor $${floor.usd}/mo (${floor.services.length} always-on service(s)) — cost-honest`,
+  };
+};
+
 export const ALL_PROPERTIES: readonly Property[] = [
   exactlyThreeTiers,
   securityFloorCoversAllBaselines,
@@ -656,9 +687,11 @@ export const ALL_PROPERTIES: readonly Property[] = [
   graphHasNoDanglingEdges,
   primaryDatastoreReachable,
   graphHasNoOrphanNodes,
-  // readPathWhenUiImplied is intentionally NOT in the gate yet — it ships warn-only
-  // (exported + tested) until validated against the 30-prompt golden set, so a
-  // false-fail can't block a launch-blocking gate on day one.
+  // readPathWhenUiImplied and budgetTierIsCostHonest are intentionally NOT in the gate
+  // yet — they ship warn-only (exported + tested) until validated against the 30-prompt
+  // golden set, so a false-fail can't block a launch-blocking gate on day one.
+  // budgetTierIsCostHonest in particular waits on the serverless-first posture change
+  // (docs/plans/2026-06-29-003): today most tiers would fail it, by design.
 ];
 
 export interface AggregateResult {
