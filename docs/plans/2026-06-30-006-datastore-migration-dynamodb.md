@@ -86,8 +86,8 @@ single-table is an optimization, not required at this traffic. Key sketches:
 - Keep `createStores()` as the seam. Add `createDynamoStores(config)` returning the SAME
   `Stores` shape, and select by env: `STORE_BACKEND=sqlite|dynamodb` (provider-abstracted,
   factory-selected — the house style). Routes/pipeline import `Stores`, never a backend.
-- **Recommended: dual-backend.** Keep SQLite as the **dev/test** backend (the 369 existing
-  tests use `openTempDb()` in-memory — fast, hermetic) and run **DynamoDB in prod**. This
+- **Dual-backend (DECIDED 2026-06-30).** Keep SQLite as the **dev/test** backend (the 369
+  existing tests use `openTempDb()` in-memory — fast, hermetic) and run **DynamoDB in prod**. This
   keeps the test suite green with near-zero churn while prod goes serverless. The DynamoDB
   impls get their OWN integration tests against a local emulator (see §5).
 - Config: replace `DB_PATH` with `STORE_BACKEND` + (for dynamodb) `AWS_REGION` and a table
@@ -102,16 +102,19 @@ single-table is an optimization, not required at this traffic. Key sketches:
   ideally run the SAME test body against both backends (parameterize the store factory) so
   DynamoDB is proven to match SQLite semantics exactly.
 
-## 6. Data migration (existing local data)
+## 6. Data migration (existing local data) — MIGRATE, don't re-seed (DECIDED)
 
-- The live data lives ONLY in the gitignored `data/drafture.db` (curated designs, approved
-  generations, design embeddings, votes). Write a one-shot `scripts/_migrateSqliteToDynamo.ts`
-  that reads every store via the SQLite impl and `upsert`s into the DynamoDB impl. Caches
-  (response/pricing/memory-research/spend) do NOT need migrating — they rebuild; only
-  **curated + approved generations + embeddings + votes** are worth carrying.
-- Alternatively (simpler for launch): re-seed curated from `scripts/seedCurated.ts` (one paid
-  Sonnet batch, ~$0.60) + re-run embeddings, and start generations fresh. Decide based on
-  whether the current gallery contents must survive.
+The live data lives ONLY in the gitignored `data/drafture.db`. As of 2026-06-30 it holds
+**5 curated designs + 10 approved generations + their embeddings + votes** (caches are
+disposable). **Carry it via a $0 one-shot `scripts/_migrateSqliteToDynamo.ts`** that reads
+each store through the SQLite impl and `upsert`s into the DynamoDB impl — no LLM, both
+backends already implement the same interfaces so this is a straight copy loop. Migrate only
+**curated + approved generations + embeddings + votes**; skip response/pricing/memory-research/
+spend caches (they rebuild).
+
+> Re-seeding (`scripts/seedCurated.ts`, ~$0.60–0.90 of Sonnet for the 6 curated prompts) is
+> NOT the path: it re-pays for the curated AND discards the 10 approved user generations + the
+> RAG embeddings. Decided: migrate, not re-seed.
 
 ## 7. Downstream consequences once state is on DynamoDB
 
