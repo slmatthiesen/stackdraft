@@ -26,7 +26,7 @@ const PRIMARY_DATASTORE_KEYWORDS = [
   "opensearch", "elasticsearch", "documentdb", "neptune", "redshift", "timestream",
 ] as const;
 
-function isPrimaryDatastore(awsService: string, role: string): boolean {
+export function isPrimaryDatastore(awsService: string, role: string): boolean {
   const s = `${awsService} ${role}`.toLowerCase();
   return PRIMARY_DATASTORE_KEYWORDS.some((kw) => s.includes(kw));
 }

@@ -17,7 +17,7 @@ import type { SecurityBaseline } from "@drafture/kb";
 
 import { TIER_NAMES } from "../../src/schema/architecture.js";
 import type { ArchitectureResult, Tier } from "../../src/schema/architecture.js";
-import { graphHasNoDanglingEdges, primaryDatastoreReachable } from "../../src/pipeline/completeness.js";
+import { graphHasNoDanglingEdges, primaryDatastoreReachable, isPrimaryDatastore } from "../../src/pipeline/completeness.js";
 // Re-export so the golden test (and any caller) keeps importing them from here.
 export { graphHasNoDanglingEdges, primaryDatastoreReachable };
 
@@ -542,6 +542,11 @@ export const exactlyThreeTiers: Property = (result) => {
 const ORPHAN_EXEMPT_KEYWORDS = [
   "s3", "cloudwatch logs", "cloudwatch log", "cloudtrail", "aws config", "log group",
   "access log", "audit", "flow log",
+  // Passive OBSERVABILITY surfaces — edgeless by nature, like CloudWatch Logs: a
+  // CloudWatch Dashboard renders metrics and X-Ray traces instrument services, so
+  // neither carries a graph edge. Scoped to "cloudwatch dashboard" (NOT bare
+  // "dashboard", which is a UI_NODE keyword that SHOULD be wired) + X-Ray.
+  "cloudwatch dashboard", "x-ray", "xray",
 ] as const;
 
 function isOrphanExempt(awsService: string, role: string): boolean {
