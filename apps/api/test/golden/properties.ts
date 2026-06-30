@@ -30,7 +30,9 @@ export type PropertyName =
   | "hasKeyDecisions"
   | "queuesAreResilient"
   | "computeMatchesDecision"
-  | "datastoreMatchesDecision";
+  | "datastoreMatchesDecision"
+  | "graphHasNoDanglingEdges"
+  | "primaryDatastoreReachable";
 
 export interface PropertyResult {
   name: PropertyName;
@@ -519,6 +521,70 @@ export const exactlyThreeTiers: Property = (result) => {
   };
 };
 
+// --- Completeness critic (R-completeness) -----------------------------------
+//
+// Structural completeness the model must satisfy regardless of domain. These
+// matter MORE since tier-delta emission: balanced/resilient are reconstructed from
+// deltas, so a delta that references a renamed/removed node id would otherwise
+// produce a silently-broken graph. Both checks are high-confidence (no realistic
+// false positive), so they gate launch.
+
+// PRIMARY data stores only (OLTP / cache / search) — deliberately EXCLUDES S3,
+// which is often a legitimately-unconnected asset/audit-log sink. A primary store
+// with no edge is always an incomplete design (you can't read or write it).
+const PRIMARY_DATASTORE_KEYWORDS = [
+  "dynamodb", "rds", "aurora", "elasticache", "redis", "memcached",
+  "opensearch", "elasticsearch", "documentdb", "neptune", "redshift", "timestream",
+] as const;
+
+function isPrimaryDatastore(awsService: string, role: string): boolean {
+  const s = `${awsService} ${role}`.toLowerCase();
+  return PRIMARY_DATASTORE_KEYWORDS.some((kw) => s.includes(kw));
+}
+
+/** Every edge endpoint must be a real node `id` in that tier (or the literal
+ *  "client"). A dangling edge is always a bug — and the canonical failure mode of a
+ *  bad tier-delta (an addEdge referencing a node id that was renamed or removed). */
+export const graphHasNoDanglingEdges: Property = (result) => {
+  const offenders: string[] = [];
+  for (const tier of result.tiers) {
+    const ids = new Set(tier.nodes.map((n) => n.id));
+    ids.add("client");
+    tier.edges.forEach((e, i) => {
+      if (!ids.has(e.from)) offenders.push(`${tier.name}:edge[${i}] from unknown '${e.from}'`);
+      if (!ids.has(e.to)) offenders.push(`${tier.name}:edge[${i}] to unknown '${e.to}'`);
+    });
+  }
+  return {
+    name: "graphHasNoDanglingEdges",
+    ok: offenders.length === 0,
+    reason: offenders.length === 0 ? "every edge references a real node" : offenders.join("; "),
+  };
+};
+
+/** A primary datastore (DynamoDB/RDS/Aurora/cache/search) must be touched by at
+ *  least one edge — an unwired primary store is an incomplete design. */
+export const primaryDatastoreReachable: Property = (result) => {
+  const offenders: string[] = [];
+  for (const tier of result.tiers) {
+    const wired = new Set<string>();
+    for (const e of tier.edges) {
+      wired.add(e.from);
+      wired.add(e.to);
+    }
+    for (const n of tier.nodes) {
+      if (isPrimaryDatastore(n.awsService, n.role) && !wired.has(n.id)) {
+        offenders.push(`${tier.name}: datastore '${n.id}' (${n.awsService}) has no edge`);
+      }
+    }
+  }
+  return {
+    name: "primaryDatastoreReachable",
+    ok: offenders.length === 0,
+    reason: offenders.length === 0 ? "every primary datastore is wired into the graph" : offenders.join("; "),
+  };
+};
+
 export const ALL_PROPERTIES: readonly Property[] = [
   exactlyThreeTiers,
   securityFloorCoversAllBaselines,
@@ -530,6 +596,8 @@ export const ALL_PROPERTIES: readonly Property[] = [
   queuesAreResilient,
   computeMatchesDecision,
   datastoreMatchesDecision,
+  graphHasNoDanglingEdges,
+  primaryDatastoreReachable,
 ];
 
 export interface AggregateResult {

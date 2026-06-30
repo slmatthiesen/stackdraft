@@ -25,6 +25,8 @@ import {
   queuesAreResilient,
   computeMatchesDecision,
   datastoreMatchesDecision,
+  graphHasNoDanglingEdges,
+  primaryDatastoreReachable,
 } from "./properties.js";
 
 const PASS_RATE_FLOOR = 0.9;
@@ -50,17 +52,35 @@ describe("property checkers on the known-good result", () => {
       queuesAreResilient,
       computeMatchesDecision,
       datastoreMatchesDecision,
+      graphHasNoDanglingEdges,
+      primaryDatastoreReachable,
     ]) {
       const r = property(good);
       expect(r.ok, `${r.name}: ${r.reason}`).toBe(true);
     }
   });
 
-  it("the aggregator reports ok with all ten properties green", () => {
+  it("the aggregator reports ok with all twelve properties green", () => {
     const agg = runAllProperties(good);
     expect(agg.ok).toBe(true);
-    expect(agg.results).toHaveLength(10);
+    expect(agg.results).toHaveLength(12);
     expect(agg.results.every((r) => r.ok)).toBe(true);
+  });
+});
+
+describe("completeness critic flips to FAIL on a structurally-broken graph", () => {
+  it("graphHasNoDanglingEdges fails when an edge references a missing node id", () => {
+    const broken = structuredClone(goodArchitecture());
+    broken.tiers[0]!.edges.push({ from: "client", to: "ghost_node", payload: "x", protocol: "HTTPS" });
+    expect(graphHasNoDanglingEdges(broken).ok).toBe(false);
+    expect(graphHasNoDanglingEdges(goodArchitecture()).ok).toBe(true);
+  });
+
+  it("primaryDatastoreReachable fails when a primary datastore has no edges", () => {
+    const broken = structuredClone(goodArchitecture());
+    broken.tiers[0]!.nodes.push({ id: "orphan_db", awsService: "DynamoDB", role: "unwired store", security: ["KMS at rest"] });
+    expect(primaryDatastoreReachable(broken).ok).toBe(false);
+    expect(primaryDatastoreReachable(goodArchitecture()).ok).toBe(true);
   });
 });
 
