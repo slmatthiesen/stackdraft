@@ -84,9 +84,39 @@ becomes Balanced), vs. a new tier below Budget. Leaning re-scope (three tiers is
    (Docker Compose: web + orchestrator + self-managed Postgres/PostGIS) + render→Lambda + S3/CloudFront,
    NO ALB/Fargate/RDS/NAT. (Did NOT enshrine into `dogfood/happyhourfriends/` yet — see follow-ups.)
    Still TODO: re-run `ct-ecommerce-api` via `growCorpus.ts --ids ct-ecommerce-api` + re-review.
-4. ⬅ **NEXT: promote the gate.** Run the full golden set (~$2-3 design-only) to confirm floors drop
-   broadly, then PROMOTE `budgetTierIsCostHonest` to a hard gate (add to ALL_PROPERTIES) +
-   re-promote `readPathWhenUiImplied` if validated. Don't promote on a single design.
+4. ⬅ **NEXT: fix the 2 gate gaps the re-runs exposed (below), THEN promote.** Run the full golden set
+   (~$2-3 design-only) to confirm floors drop broadly, then PROMOTE `budgetTierIsCostHonest` to a hard
+   gate (add to ALL_PROPERTIES) + re-promote `readPathWhenUiImplied` if validated. Don't promote on a
+   single design, and don't promote until the two gaps below are fixed (else honest single-box designs
+   flake the gate).
+
+## Re-run findings (2026-06-30, design-only, ~$0.18 total) — posture CONFIRMED on 3 systems
+- **notification (high-value test):** budget = PURE SERVERLESS, $0 idle, gate **13/13**, AND fully
+  durable (outbox/exactly-once, SQS+DLQ+idempotent consumers, SES event publishing, immutable billing
+  ledger). PROVES the posture does NOT over-cheap a critical system — serverless-first IS the durable
+  choice here. (`scratchpad/notif/`)
+- **ct-ecommerce-api (`LJhAwNMIjZR1`, bloat case #2):** LEANED OUT — budget dropped its RDS (that's
+  what tripped the datastore check). Gate 10/13: the failures are NOT bloat (see gap A + a model
+  `oncall_email` dangling-edge typo + queue-tag variance). `$0.091`.
+- **b4ao9aRmoVwo (another happy-hour-class brief):** collapsed to a single EC2 box + self-managed
+  Postgres; budget clean (12/13, orphans only in balanced/resilient). But floor read **$45 via a
+  PHANTOM NAT** (gap B). (`scratchpad/selfhost/`)
+
+## TWO gaps to fix before promotion (both $0 — code + offline verify, NO API)
+- **A. `datastoreMatchesDecision` false-positive on a TIER-LADDER datastore decision** (the datastore
+  analog of the compute fix already done). A decision like *"RDS at balanced; Aurora at resilient"*
+  classifies "vpcbound" and the check then demands the BUDGET tier also have a VPC-bound store — but
+  budget correctly defers RDS. Fix mirroring `computeMatchesDecision`: scope/relax so a budget tier
+  that legitimately defers the managed store (and has a serverless/self-managed store instead) is not
+  failed; only fail a tier that has NO primary store, or a true serverless-decision↔vpcbound-node
+  contradiction. `apps/api/test/golden/properties.ts`. Add a tier-ladder fixture.
+- **B. Phantom NAT in the cost engine on a single-box budget.** `estimateCosts` (apps/api/src/pipeline/
+  cost.ts) injects a ~$33 NAT Gateway cost driver ("required by the private-subnet security default")
+  on a budget tier that has NO NAT node and NO private-subnet tag — only an EC2 box. It inflated a
+  $24 single-box budget to $45 (and only hh-pack1 escaped, because the model happened to tag its EC2
+  "public subnet"). Fix: do NOT synthesize a NAT cost unless the tier actually runs a PRIVATE-subnet
+  VPC-bound service (or has a NAT node). A public-subnet single box needs no NAT. Verify offline with
+  the existing scratchpad designs (no API).
 
 ## Open follow-ups
 - ✅ **DONE** — `computeMatchesDecision` HYBRID false-positive: now per-service scoped (serverless
@@ -95,8 +125,8 @@ becomes Balanced), vs. a new tier below Budget. Leaning re-scope (three tiers is
 - ✅ **DONE** — delta-reconstruction dangling edges: `applyTierDelta` (architecture.ts) now prunes
   edges whose endpoint a delta removed (the bigger budget→balanced delta from the box→managed-split
   posture was producing these). Targeted (only explicitly-removed ids) so it never masks a typo'd id.
-- **Refresh the dogfood pack:** `dogfood/happyhourfriends/` still holds the OLD $102.86 bloat. Regen a
-  CLEAN gate-passing 3-tier pack (output has queue-resilience-tag variance run-to-run) and replace it.
+- ✅ **DONE** — dogfood pack refreshed (commit 9e836fe) to the single-box budget ($25/1svc); DRAFTURE.md
+  + README rewritten. Used the already-generated hh-pack1 artifacts ($0). budget.tf 84 resources.
 - 3 corpus designs still PENDING approval (sl-webhook `kZg3E8YdaeOm`, qa-order `1B_GyLhZ-m0z`,
   ss-spa `CE7zSZRS5wbz`) — all serverless/cost-honest; approve + `backfillEmbeddings.ts` when ready.
 - **Speed (raised this session):** consumer design call ≈ ~90–130s (out ~6.7k tokens is the bottleneck);
