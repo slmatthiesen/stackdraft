@@ -542,16 +542,20 @@ export const exactlyThreeTiers: Property = (result) => {
 const ORPHAN_EXEMPT_KEYWORDS = [
   "s3", "cloudwatch logs", "cloudwatch log", "cloudtrail", "aws config", "log group",
   "access log", "audit", "flow log",
-  // Passive OBSERVABILITY surfaces — edgeless by nature, like CloudWatch Logs: a
-  // CloudWatch Dashboard renders metrics and X-Ray traces instrument services, so
-  // neither carries a graph edge. Scoped to "cloudwatch dashboard" (NOT bare
-  // "dashboard", which is a UI_NODE keyword that SHOULD be wired) + X-Ray.
-  "cloudwatch dashboard", "x-ray", "xray",
+  // Passive OBSERVABILITY surfaces — edgeless by nature, like CloudWatch Logs:
+  // X-Ray traces instrument services in-process, so they carry no graph edge.
+  "x-ray", "xray",
 ] as const;
 
 function isOrphanExempt(awsService: string, role: string): boolean {
   const s = `${awsService} ${role}`.toLowerCase();
-  return ORPHAN_EXEMPT_KEYWORDS.some((kw) => s.includes(kw));
+  if (ORPHAN_EXEMPT_KEYWORDS.some((kw) => s.includes(kw))) return true;
+  // A CloudWatch Dashboard is a passive metric-viz surface (edgeless like a log
+  // group), whichever word holds "dashboard" — service "CloudWatch Dashboard" OR
+  // service "CloudWatch" + role "...dashboard". Require BOTH tokens so a bare
+  // user-facing "dashboard" (a UI_NODE that SHOULD be wired) is never exempted.
+  if (s.includes("cloudwatch") && s.includes("dashboard")) return true;
+  return false;
 }
 
 /** Every node must participate in at least one edge — an unwired active node is
