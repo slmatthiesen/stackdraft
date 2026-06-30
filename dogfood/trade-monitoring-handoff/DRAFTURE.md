@@ -56,7 +56,11 @@ when you refactor.
 
 ## 4. What you MUST do to make `budget.tf` apply-ready
 
-This is **reference-only** HCL. Known gaps the agent owns:
+This `budget.tf` is now emitted by the **deterministic Terraform emitter** (from the typed
+graph, not an LLM), so the infra-wiring gaps are structurally closed: the API Gateway
+`auto_deploy` stage, the CloudFront-logs S3 delivery ACL, and the KMS-key-policy grants for
+CloudWatch Logs are all emitted alongside the resources that need them. Reference-only still
+— the remaining work the agent owns is **application code and adoption**, not infra wiring:
 
 - **No real Lambda handlers.** The Lambdas point at placeholder zips that don't exist.
   Supply real Python handlers: `ingest` (validate the **shared-secret bearer token** from
@@ -67,12 +71,6 @@ This is **reference-only** HCL. Known gaps the agent owns:
   `streams`-stub (DynamoDB Streams → S3 archive for the future AI eval). **Token
   validation is handler logic — it is NOT in the `.tf`; do not ship the endpoint without
   it**, and reject mismatches before any side-effect.
-- **API Gateway has no stage/deployment.** `aws_apigatewayv2_route` + integration exist but
-  there is no `aws_apigatewayv2_stage`/`aws_apigatewayv2_deployment`, so the endpoint won't
-  actually serve. Add an `auto_deploy = true` stage.
-- **CloudFront logging bucket needs a delivery policy/ACL.** `aws_s3_bucket.cloudfront_logs`
-  is referenced but has no policy granting CloudFront log delivery — add the canonical
-  S3 log-delivery policy.
 - **Adopt, don't recreate, anything that already exists.** If the user already has the
   table/buckets/hosting, `terraform import` them before applying — a naive `apply` will
   attempt to *create* and either fail or replace. Read the plan for `+ create` vs
