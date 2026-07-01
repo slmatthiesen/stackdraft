@@ -54,6 +54,44 @@ const ROUTE = "/api/config";
 const FORMAT = "terraform";
 
 /**
+ * Read a persisted tier's Terraform, checking both stores an id may belong to: a
+ * fresh/community generation (GenerationsStore) or an admin-curated example
+ * (CuratedStore) — the client passes whichever id the design actually opened under
+ * (see api.ts `fetchDesign`'s generation→curated fallback), and this mirrors it
+ * server-side so curated examples get the same $0 free-read cache as generations.
+ */
+async function readStoredTerraform(
+  ctx: AppContext,
+  generationId: string,
+  tierName: string,
+): Promise<{ code: string } | undefined> {
+  const fromGeneration = await ctx.stores.generations.getTerraform(generationId, tierName);
+  if (fromGeneration) return fromGeneration;
+  return ctx.stores.curated.getTerraform(generationId, tierName);
+}
+
+/**
+ * Persist a tier's Terraform onto whichever row owns this id. Both stores'
+ * `setTerraform` return false (never throw) for an id they don't own, so trying
+ * curated on a generations miss is one cheap extra read — best-effort throughout,
+ * since a persist failure must never break the artifact the user just paid for.
+ */
+async function persistTerraform(
+  ctx: AppContext,
+  req: FastifyRequest,
+  generationId: string,
+  tierName: string,
+  code: string,
+): Promise<void> {
+  try {
+    const savedToGeneration = await ctx.stores.generations.setTerraform(generationId, tierName, code);
+    if (!savedToGeneration) await ctx.stores.curated.setTerraform(generationId, tierName, code);
+  } catch (err) {
+    req.log.error({ err }, "terraform persist failed (non-fatal)");
+  }
+}
+
+/**
  * Output budget for the reference-config call. Sized to fit a COMPLETE single-tier
  * HCL file: smaller caps truncated real designs mid-resource (2500 cut the self-host
  * budget tier; 16000 cut the notification-system RESILIENT tier — full security floor
@@ -164,15 +202,16 @@ async function handleConfig(
   // same reference config, so an identical request is served free from cache.
   const cacheKey = hashPrompt({ tier, format: FORMAT });
 
-  // (0) Long-lived Terraform cache on the generation row (lazy-persist). Survives the
-  // 24h response cache and serves gallery pulls for $0 — the first config request for
-  // a (generation, tier) pays; every later pull is a free read. The client supplies
-  // generationId when the design was persisted; without it we fall through to the
-  // normal on-demand + 24h-cache path.
+  // (0) Long-lived Terraform cache on the owning row (lazy-persist) — a fresh/
+  // community generation OR an admin-curated example, whichever this id belongs to.
+  // Survives the 24h response cache and serves gallery/example pulls for $0 — the
+  // first config request for a (design, tier) pays; every later pull, by anyone, is
+  // a free read. The client supplies generationId when the design was persisted;
+  // without it we fall through to the normal on-demand + 24h-cache path.
   const tierName = typeof tier?.name === "string" ? tier.name : undefined;
   const generationId = body.generationId;
   if (generationId && tierName) {
-    const stored = await ctx.stores.generations.getTerraform(generationId, tierName);
+    const stored = await readStoredTerraform(ctx, generationId, tierName);
     if (stored) {
       emit("ok", { cacheHit: true, costUsd: 0 });
       return reply.code(200).send({ format: FORMAT, code: stored.code });
@@ -198,11 +237,7 @@ async function handleConfig(
       if (assembled.coverage.unsupported.length === 0) {
         const responseBody = { format: FORMAT, code: assembled.code };
         if (generationId && tierName) {
-          try {
-            await ctx.stores.generations.setTerraform(generationId, tierName, responseBody.code);
-          } catch (err) {
-            req.log.error({ err }, "terraform persist failed (non-fatal)");
-          }
+          await persistTerraform(ctx, req, generationId, tierName, responseBody.code);
         }
         await ctx.stores.responseCache.set(cacheKey, JSON.stringify(responseBody));
         emit("ok", { cacheHit: false, costUsd: 0 });
@@ -262,14 +297,9 @@ async function handleConfig(
       code: REFERENCE_WARNING_HEADER + flagIfIncomplete(annotateWireupGaps(cleaned)),
     };
 
-    // Persist this tier's Terraform onto the generation row so future pulls are free.
-    // Best-effort: a persist failure never breaks the artifact the user just paid for.
+    // Persist this tier's Terraform onto the owning row so future pulls are free.
     if (generationId && tierName) {
-      try {
-        await ctx.stores.generations.setTerraform(generationId, tierName, responseBody.code);
-      } catch (err) {
-        req.log.error({ err }, "terraform persist failed (non-fatal)");
-      }
+      await persistTerraform(ctx, req, generationId, tierName, responseBody.code);
     }
 
     await ctx.stores.responseCache.set(cacheKey, JSON.stringify(responseBody));

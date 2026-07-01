@@ -420,3 +420,62 @@ describe("POST /api/config — deterministic Terraform (TERRAFORM_DETERMINISTIC)
     await app.close();
   });
 });
+
+describe("POST /api/config — curated-example Terraform persistence", () => {
+  it("a curated run's id persists onto the CURATED row, not the generations table (deterministic path)", async () => {
+    const fake = makeFake();
+    const { app, ctx } = await buildHarness(fake);
+    const tier = templatedTier();
+    await ctx.stores.curated.upsert({
+      id: "curated-1",
+      title: "Example",
+      prompt: "p",
+      body: JSON.stringify({ tiers: [tier] }),
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/config",
+      payload: { tier, generationId: "curated-1" },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // Landed on the curated row (this id's actual owner), never on generations.
+    expect((await ctx.stores.curated.getTerraform("curated-1", tier.name))?.code).toContain(res.json().code);
+    expect(await ctx.stores.generations.getTerraform("curated-1", tier.name)).toBeUndefined();
+
+    await app.close();
+  });
+
+  it("a later pull for the same curated id+tier is a free cache hit from the curated row (LLM path)", async () => {
+    const fake = makeFake();
+    const { app, ctx } = await buildHarness(fake);
+    const tier = balancedTier();
+    await ctx.stores.curated.upsert({
+      id: "curated-2",
+      title: "Example",
+      prompt: "p",
+      body: JSON.stringify({ tiers: [tier] }),
+    });
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/config",
+      payload: { tier, generationId: "curated-2" },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(fake.calls.generateConfig).toBe(1);
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/config",
+      payload: { tier, generationId: "curated-2" },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual(first.json());
+    // Served from the curated row's lazy cache — no second provider call.
+    expect(fake.calls.generateConfig).toBe(1);
+
+    await app.close();
+  });
+});
