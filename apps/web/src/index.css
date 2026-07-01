@@ -478,6 +478,21 @@ body {
   border-color: var(--brand-dark);
 }
 
+/* Lazy per-tier (fix A): an ungenerated tier reads as an "add" affordance — dashed,
+   muted, distinct from a real (present) tab — until the user generates it on demand. */
+.tiers__tab--add {
+  border-style: dashed;
+  background: transparent;
+  opacity: 0.85;
+}
+.tiers__tab--add:hover:not(:disabled) {
+  opacity: 1;
+}
+.tiers__tab--add:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .tiers__tab-name {
   font-weight: 700;
 }

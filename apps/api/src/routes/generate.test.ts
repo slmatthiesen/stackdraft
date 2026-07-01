@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import { loadConfig } from "../config.js";
-import type { LlmProvider, ProviderResult, Usage } from "../llm/provider.js";
+import type { GenerateScope, LlmProvider, ProviderResult, Usage } from "../llm/provider.js";
 import type { EmbeddingProvider } from "../llm/embeddings/provider.js";
 import type { ArchitectureResult, Clarification, TierName } from "../schema/architecture.js";
 import { TIER_NAMES } from "../schema/architecture.js";
@@ -96,10 +96,20 @@ function makeFake(opts: FakeOpts = {}): Fake {
         usage: USAGE,
       };
     },
-    async generate(): Promise<ProviderResult<ArchitectureResult>> {
+    // Scope-aware, like the real provider: `budget` emits only the budget tier (the
+    // lazy default), `addTier` emits only the requested tier, `full`/undefined emits all.
+    async generate(_prompt, _opts, scope?: GenerateScope): Promise<ProviderResult<ArchitectureResult>> {
       calls.generate += 1;
       if (opts.generateError) throw new Error("upstream boom");
-      return { result: opts.arch ?? validArchitecture(), usage: USAGE };
+      const arch = opts.arch ?? validArchitecture();
+      if (scope?.kind === "budget") {
+        return { result: { ...arch, tiers: arch.tiers.filter((t) => t.name === "budget") }, usage: USAGE };
+      }
+      if (scope?.kind === "addTier") {
+        const tier = arch.tiers.find((t) => t.name === scope.target) ?? makeTier(scope.target);
+        return { result: { ...arch, tiers: [tier] }, usage: USAGE };
+      }
+      return { result: arch, usage: USAGE };
     },
     async generateConfig(): Promise<ProviderResult<string>> {
       return { result: 'resource "aws_lambda_function" "api" {}', usage: USAGE };
@@ -152,7 +162,7 @@ function lastTelemetry(lines: string[]): Record<string, unknown> {
 const SPEC = "A serverless REST API on Lambda + DynamoDB for a small SaaS; bursty but low volume.";
 
 describe("POST /api/generate", () => {
-  it("happy path returns three tiers + costs and emits one telemetry line (R3)", async () => {
+  it("lazy default returns ONLY the budget tier + costs and emits one telemetry line (R3, fix A)", async () => {
     const fake = makeFake();
     const { app, lines } = await buildHarness(fake);
 
@@ -160,10 +170,11 @@ describe("POST /api/generate", () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.tiers.map((t: { name: string }) => t.name)).toEqual(["budget", "balanced", "resilient"]);
+    // Fresh generation is budget-only now (the user adds balanced/resilient on demand).
+    expect(body.tiers.map((t: { name: string }) => t.name)).toEqual(["budget"]);
     expect(Array.isArray(body.assumptions)).toBe(true);
-    // Staff-level signal is surfaced alongside the tiers.
-    expect(body.recommendedTier).toBe("balanced");
+    // Budget is the only tier generated, so it is the pre-selected default.
+    expect(body.recommendedTier).toBe("budget");
     expect(typeof body.recommendationRationale).toBe("string");
     // The global security floor must survive into the response (a cherry-picking
     // response body dropped it after the schema added it).
@@ -254,7 +265,7 @@ describe("POST /api/generate", () => {
       payload: { description: "build me something", round: 2 },
     });
     expect(round2.statusCode).toBe(200);
-    expect(round2.json().tiers).toHaveLength(3);
+    expect(round2.json().tiers).toHaveLength(1); // budget-only default (fix A)
     expect(fake.calls.generate).toBe(1);
 
     await app.close();
@@ -373,6 +384,110 @@ describe("POST /api/generate", () => {
     // The reservation was released — no spend lingers from a call that produced nothing.
     expect(await ctx.stores.spendLedger.spentTodayUsd()).toBeCloseTo(0);
     expect(lastTelemetry(lines).outcome).toBe("error");
+
+    await app.close();
+  });
+});
+
+describe("POST /api/generate/tier (+ Add tier, fix A)", () => {
+  const budgetTier = makeTier("budget");
+
+  it("adds one requested tier as a costed delta and calls generate once", async () => {
+    const fake = makeFake();
+    const { app, lines } = await buildHarness(fake);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/generate/tier",
+      payload: { description: SPEC, tier: "balanced", budgetTier },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.tier.name).toBe("balanced");
+    // Cost drivers were filled deterministically (U7) for the added tier.
+    expect(body.tier.costDrivers.length).toBeGreaterThan(0);
+    expect(fake.calls.generate).toBe(1);
+
+    const rec = lastTelemetry(lines);
+    expect(rec.route).toBe("/api/generate/tier");
+    expect(rec.outcome).toBe("ok");
+    expect(rec.costUsd as number).toBeGreaterThan(0);
+
+    await app.close();
+  });
+
+  it("re-adding the same tier is served from cache — no second generate, $0", async () => {
+    const fake = makeFake();
+    const { app } = await buildHarness(fake);
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/generate/tier",
+      payload: { description: SPEC, tier: "resilient", budgetTier },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(fake.calls.generate).toBe(1);
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/generate/tier",
+      payload: { description: SPEC, tier: "resilient", budgetTier },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual(first.json());
+    expect(fake.calls.generate).toBe(1); // cache short-circuited the second add
+
+    await app.close();
+  });
+
+  it("merges the added tier into the persisted generation row (deep link fills in)", async () => {
+    const fake = makeFake();
+    const { app, stores } = await buildHarness(fake);
+
+    // A budget-only generation is persisted first.
+    const gen = await app.inject({ method: "POST", url: "/api/generate", payload: { description: SPEC } });
+    const generationId = gen.json().id as string;
+    expect(generationId).toBeTruthy();
+
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/generate/tier",
+      payload: { description: SPEC, tier: "balanced", budgetTier, generationId },
+    });
+    expect(add.statusCode).toBe(200);
+
+    const row = await stores.generations.getById(generationId);
+    const stored = JSON.parse(row!.body) as { tiers: { name: string }[] };
+    expect(stored.tiers.map((t) => t.name)).toEqual(["budget", "balanced"]);
+
+    await app.close();
+  });
+
+  it("rejects budget as an add-tier target (400)", async () => {
+    const fake = makeFake();
+    const { app } = await buildHarness(fake);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/generate/tier",
+      payload: { description: SPEC, tier: "budget", budgetTier },
+    });
+    expect(res.statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it("missing budgetTier is a 400", async () => {
+    const fake = makeFake();
+    const { app } = await buildHarness(fake);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/generate/tier",
+      payload: { description: SPEC, tier: "balanced" },
+    });
+    expect(res.statusCode).toBe(400);
 
     await app.close();
   });

@@ -19,6 +19,9 @@ const indentPolicy = (json: string): string =>
 const dash = (tf: string): string => tf.replace(/_/g, "-");
 /** AWS LB / target-group names: ≤32 chars, alphanumeric + hyphen. */
 const lbName = (prefix: string, tf: string): string => `${prefix}-${dash(tf)}`.slice(0, 32).replace(/-+$/, "");
+/** OpenSearch domain names: 3–28 chars, lowercase, start with a letter, [a-z0-9-]. */
+const domainName = (prefix: string, tf: string): string =>
+  `${prefix}-${dash(tf)}`.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 28).replace(/-+$/, "");
 
 /** Parse an instance class like `db.t4g.medium` / `cache.t4g.micro` from the surface. */
 function parseClass(node: ArchitectureNode, fallback: string): string {
@@ -455,6 +458,89 @@ export function emitElasticache(node: ArchitectureNode, ctx: EmitCtx): HclBlock[
         `  subnet_group_name          = aws_elasticache_subnet_group.${tf}.name`,
         `  security_group_ids         = [aws_security_group.${tf}.id]`,
         `  port                       = 6379`,
+        `}`,
+      ].join("\n"),
+    },
+  ];
+}
+
+// --- OpenSearch --------------------------------------------------------------
+
+/** OpenSearch instance class parsed from the surface (e.g. "r6g.large.search"),
+ *  defaulting to a small general-purpose node. Distinct from parseClass — OpenSearch
+ *  classes are bare (no db./cache. prefix) and end in `.search`. */
+function parseSearchClass(node: ArchitectureNode): string {
+  const m = /\b([a-z][0-9][a-z]?g?\.[a-z0-9]+\.search)\b/.exec(`${node.awsService} ${node.role}`.toLowerCase());
+  return m ? m[1]! : "t3.small.search";
+}
+
+export function emitOpenSearch(node: ArchitectureNode, ctx: EmitCtx): HclBlock[] {
+  const tf = ctx.tf(node.id);
+  const section = `OpenSearch — ${node.role}`;
+  const callers = inVpcComputeCallers(ctx, node.id);
+  const multiAz = isMultiAz(node);
+
+  const ingress = callers.length
+    ? callers.flatMap((c) => [
+        `  ingress {`,
+        `    description     = "HTTPS from ${c.role}"`,
+        `    from_port       = 443`,
+        `    to_port         = 443`,
+        `    protocol        = "tcp"`,
+        `    security_groups = [aws_security_group.${ctx.tf(c.id)}.id]`,
+        `  }`,
+      ])
+    : [];
+
+  return [
+    {
+      section,
+      hcl: [
+        `resource "aws_security_group" "${tf}" {`,
+        `  name        = "${ctx.prefix}-${dash(tf)}-sg"`,
+        `  description = "OpenSearch ${node.role} — ingress only from in-VPC callers"`,
+        `  vpc_id      = aws_vpc.main.id`,
+        ...ingress,
+        `}`,
+        ``,
+        `resource "aws_opensearch_domain" "${tf}" {`,
+        `  domain_name    = "${domainName(ctx.prefix, tf)}"`,
+        `  engine_version = "OpenSearch_2.11"`,
+        ``,
+        `  cluster_config {`,
+        `    instance_type          = "${parseSearchClass(node)}"`,
+        `    instance_count         = ${multiAz ? 2 : 1}`,
+        `    zone_awareness_enabled = ${multiAz}`,
+        ...(multiAz
+          ? [`    zone_awareness_config {`, `      availability_zone_count = 2`, `    }`]
+          : []),
+        `  }`,
+        ``,
+        `  ebs_options {`,
+        `    ebs_enabled = true`,
+        `    volume_type = "gp3"`,
+        `    volume_size = 20`,
+        `  }`,
+        ``,
+        `  vpc_options {`,
+        `    subnet_ids         = [${multiAz ? "aws_subnet.private_a.id, aws_subnet.private_b.id" : "aws_subnet.private_a.id"}]`,
+        `    security_group_ids = [aws_security_group.${tf}.id]`,
+        `  }`,
+        ``,
+        `  encrypt_at_rest {`,
+        `    enabled = true`,
+        // Budget floor: the AWS-owned OpenSearch key (free). Balanced+/compliance: a CMK.
+        ...(ctx.paidSecurity ? [`    kms_key_id = aws_kms_key.main.arn`] : []),
+        `  }`,
+        ``,
+        `  node_to_node_encryption {`,
+        `    enabled = true`,
+        `  }`,
+        ``,
+        `  domain_endpoint_options {`,
+        `    enforce_https       = true`,
+        `    tls_security_policy = "Policy-Min-TLS-1-2-2019-07"`,
+        `  }`,
         `}`,
       ].join("\n"),
     },

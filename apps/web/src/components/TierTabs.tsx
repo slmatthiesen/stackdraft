@@ -8,7 +8,7 @@
  */
 
 import { useMemo, useState } from "react";
-import type { Tier, TierName } from "../lib/types.js";
+import { TIER_NAMES, type Tier, type TierName } from "../lib/types.js";
 import { graphToMermaid } from "../lib/mermaid.js";
 import { applySizeSelection } from "../lib/cost.js";
 import { type SizeId } from "../lib/sizeLadder.js";
@@ -32,14 +32,27 @@ export function TierTabs({
   assumptions,
   selected,
   onSelect,
+  onAddTier,
+  addingTier,
 }: {
   tiers: Tier[];
   assumptions: string[];
   /** Active tier — owned by the parent so the page-bottom Terraform tracks it. */
   selected: TierName;
   onSelect: (name: TierName) => void;
+  /** Lazy per-tier (fix A): when provided, tiers NOT yet generated show a "+ Add"
+   *  button that generates them on demand. Omitted (deep-linked/library designs) →
+   *  only the tiers present render, exactly as before. */
+  onAddTier?: (name: TierName) => void;
+  /** The tier currently being generated (shows a spinner on its button). */
+  addingTier?: TierName | null;
 }): JSX.Element {
   const tier = tiers.find((t) => t.name === selected) ?? tiers[0];
+
+  // With add-on-demand, always show all three tier slots (present → tab, absent →
+  // "+ Add"); otherwise just the tiers we have, in their given order.
+  const present = new Map(tiers.map((t) => [t.name, t] as const));
+  const slots: TierName[] = onAddTier ? [...TIER_NAMES] : tiers.map((t) => t.name);
 
   // Per-tier instance-size overrides — only the user's EXPLICIT picks. There is no
   // auto-seeded default selection anymore: the server already priced each box at the
@@ -74,20 +87,39 @@ export function TierTabs({
     <div className="tiers">
       <p className="tiers__hint">Compare tiers — tap one to switch the design below:</p>
       <div className="tiers__tablist" role="tablist" aria-label="Robustness tiers">
-        {tiers.map((t) => (
-          <button
-            key={t.name}
-            role="tab"
-            aria-selected={t.name === selected}
-            className={`tiers__tab ${t.name === selected ? "tiers__tab--active" : ""}`}
-            onClick={() => onSelect(t.name)}
-          >
-            <span className="tiers__tab-name">{TAB_LABELS[t.name]}</span>
-            {TAB_SUBLABELS[t.name] && (
-              <span className="tiers__tab-sub">{TAB_SUBLABELS[t.name]}</span>
-            )}
-          </button>
-        ))}
+        {slots.map((name) => {
+          const t = present.get(name);
+          if (t) {
+            return (
+              <button
+                key={name}
+                role="tab"
+                aria-selected={name === selected}
+                className={`tiers__tab ${name === selected ? "tiers__tab--active" : ""}`}
+                onClick={() => onSelect(name)}
+              >
+                <span className="tiers__tab-name">{TAB_LABELS[name]}</span>
+                {TAB_SUBLABELS[name] && <span className="tiers__tab-sub">{TAB_SUBLABELS[name]}</span>}
+              </button>
+            );
+          }
+          // Absent tier → a "+ Add" affordance (fix A). Generates it on demand and
+          // switches to it; the current tier stays visible until it lands.
+          const busy = addingTier === name;
+          return (
+            <button
+              key={name}
+              type="button"
+              className="tiers__tab tiers__tab--add"
+              disabled={addingTier != null}
+              aria-busy={busy}
+              onClick={() => onAddTier?.(name)}
+            >
+              <span className="tiers__tab-name">{busy ? "Adding…" : `+ ${TAB_LABELS[name]}`}</span>
+              <span className="tiers__tab-sub">{busy ? "generating" : "add tier"}</span>
+            </button>
+          );
+        })}
       </div>
 
       <section className="tier" role="tabpanel" aria-label={`${TAB_LABELS[tier.name]} tier`}>

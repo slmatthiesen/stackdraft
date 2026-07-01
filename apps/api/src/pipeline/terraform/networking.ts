@@ -18,7 +18,13 @@ import type { HclBlock } from "./hcl.js";
 
 /** True when the tier has a workload that must sit in a private subnet behind NAT. */
 export function needsPrivateSubnets(ctx: EmitCtx): boolean {
-  return ctx.has("rds") || ctx.has("elasticache") || ctx.has("fargate") || ctx.has("nat");
+  return (
+    ctx.has("rds") ||
+    ctx.has("elasticache") ||
+    ctx.has("opensearch") ||
+    ctx.has("fargate") ||
+    ctx.has("nat")
+  );
 }
 
 /** True when the tier needs any VPC at all (private workloads OR an EC2 box). */

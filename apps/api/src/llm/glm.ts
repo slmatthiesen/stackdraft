@@ -15,9 +15,10 @@
 import type { z } from "zod";
 
 import type { Config } from "../config.js";
-import { GeneratedWireSchema, ClarificationSchema, reconstructTiers } from "../schema/architecture.js";
+import { ClarificationSchema } from "../schema/architecture.js";
 import type { GeneratedArchitecture, Clarification, GeneratedTier } from "../schema/architecture.js";
-import { architectureToolSchema, clarificationToolSchema } from "./schema-utils.js";
+import { clarificationToolSchema } from "./schema-utils.js";
+import { resolveGenerateScope, type GenerateScope } from "./generateScope.js";
 import { renderTerraformWireupRules } from "./configPrompt.js";
 import { ProviderError } from "./provider.js";
 import type {
@@ -42,15 +43,6 @@ interface FunctionDef {
   type: "function";
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }
-
-const ARCHITECTURE_FN: FunctionDef = {
-  type: "function",
-  function: {
-    name: "emit_architecture",
-    description: "Emit the three-tier AWS architecture design as one structured object.",
-    parameters: architectureToolSchema(),
-  },
-};
 
 const CLARIFY_FN: FunctionDef = {
   type: "function",
@@ -149,25 +141,38 @@ export class GlmProvider implements LlmProvider {
   async generate(
     prompt: GroundedPrompt,
     opts?: GenerateOptions,
+    scope?: GenerateScope,
   ): Promise<ProviderResult<GeneratedArchitecture>> {
     const maxTokens = opts?.maxTokens ?? this.settings.maxTokens;
-    // The model emits the tier-delta WIRE shape; reconstruct full tiers here so
-    // callers always receive a complete GeneratedArchitecture.
+    // The scope picks the function (budget-only / add-one-tier / full three) — the
+    // lazy-per-tier lever. The model emits a WIRE shape; reconstruct the tier(s) here.
+    const resolved = resolveGenerateScope(scope);
+    const userContent = resolved.extraUserContent
+      ? `${prompt.volatileSuffix}\n\n${resolved.extraUserContent}`
+      : prompt.volatileSuffix;
+    const fn: FunctionDef = {
+      type: "function",
+      function: {
+        name: resolved.toolName,
+        description: resolved.toolDescription,
+        parameters: resolved.toolSchema,
+      },
+    };
     const { result: wire, usage } = await this.structuredCall(
       {
         model: this.settings.model,
         max_tokens: maxTokens,
         messages: [
           { role: "system", content: prompt.staticPrefix },
-          { role: "user", content: prompt.volatileSuffix },
+          { role: "user", content: userContent },
         ],
-        tools: [ARCHITECTURE_FN],
-        tool_choice: { type: "function", function: { name: ARCHITECTURE_FN.function.name } },
+        tools: [fn],
+        tool_choice: { type: "function", function: { name: fn.function.name } },
         thinking: THINKING_OFF,
       },
-      GeneratedWireSchema,
+      resolved.wireSchema,
     );
-    return { result: reconstructTiers(wire), usage };
+    return { result: resolved.reconstruct(wire), usage };
   }
 
   async clarify(description: string, priorAnswers?: string[]): Promise<ProviderResult<Clarification>> {

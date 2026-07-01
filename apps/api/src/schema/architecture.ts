@@ -172,11 +172,23 @@ export const GeneratedWireSchema = z.object({
     .describe("Exactly two: balanced then resilient, EACH as a delta vs the tier below it."),
 });
 
+/** LAZY PER-TIER WIRE SHAPE — the BUDGET tier only (the cost/latency default). The
+ *  user picks a tier up front (budget by default) and we generate ONLY that one graph
+ *  (~⅓ the output of the three-tier emission), adding balanced/resilient on demand via
+ *  {@link GeneratedTierDeltaSchema} (see `generate(scope:"budget"|"addTier")`). */
+export const GeneratedBudgetWireSchema = z.object({
+  ...commonGeneratedShape,
+  baseTier: GeneratedTierSchema.describe("The BUDGET tier as a FULL graph — the only tier emitted in the lazy default."),
+});
+export type GeneratedBudgetWire = z.infer<typeof GeneratedBudgetWireSchema>;
+
 /** What downstream code consumes: three FULL tiers (no security floor yet — injected
  *  later). The provider produces this from the wire shape via `reconstructTiers`. */
 export const GeneratedArchitectureSchema = z.object({
   ...commonGeneratedShape,
-  tiers: z.array(GeneratedTierSchema).length(3).describe("Exactly three tiers: budget, balanced, resilient."),
+  // 1..3 since lazy generation: a fresh call returns budget only; the user adds
+  // balanced/resilient on demand (each reconstructed as a delta vs the budget baseline).
+  tiers: z.array(GeneratedTierSchema).min(1).max(3).describe("One to three tiers (budget always first)."),
 });
 
 /** The full result the backend assembles: reconstructed graph + injected security
@@ -187,8 +199,9 @@ export const ArchitectureResultSchema = z
     ...commonGeneratedShape,
     tiers: z
       .array(TierSchema)
-      .length(3)
-      .describe("Exactly three tiers: budget, balanced, resilient (with computed costDrivers)."),
+      .min(1)
+      .max(3)
+      .describe("One to three tiers (budget always first), with computed costDrivers — grows as the user adds tiers."),
     // Injected deterministically from the KB — the safe-by-default floor (the 8
     // baselines) stated ONCE, applying to ALL tiers.
     securityFloor: z
@@ -257,6 +270,25 @@ export function reconstructTiers(wire: GeneratedWire): GeneratedArchitecture {
   };
 }
 
+/** The lazy default: a single-tier {@link GeneratedArchitecture} carrying ONLY the
+ *  budget baseline. The other tiers are added later via {@link reconstructAddedTier}. */
+export function reconstructBudgetOnly(wire: GeneratedBudgetWire): GeneratedArchitecture {
+  return {
+    assumptions: wire.assumptions,
+    clarificationsUsed: wire.clarificationsUsed,
+    tiers: [wire.baseTier],
+    keyDecisions: wire.keyDecisions,
+  };
+}
+
+/** Reconstruct ONE added tier (balanced or resilient) by applying its delta to the
+ *  budget baseline — the on-demand "+ Add tier" path. Same delta arithmetic as the
+ *  three-tier reconstruction, but each added tier is expressed vs BUDGET (not vs the
+ *  tier below), so tiers can be added in any order without a missing intermediate. */
+export function reconstructAddedTier(budgetTier: GeneratedTier, delta: GeneratedTierDelta): GeneratedTier {
+  return applyTierDelta(budgetTier, delta);
+}
+
 /** The reconstructed graph + injected security floor, BEFORE the deterministic cost
  *  drivers are computed. `generateArchitecture` returns this; `estimateCosts`
  *  fills `costDrivers` on each tier to produce a full {@link ArchitectureResult}. */
@@ -281,6 +313,24 @@ export type Clarification = z.infer<typeof ClarificationSchema>;
 export function architectureJsonSchema(): Record<string, unknown> {
   return zodToJsonSchema(GeneratedWireSchema, {
     name: "GeneratedArchitectureWire",
+    target: "jsonSchema7",
+    $refStrategy: "none",
+  }) as Record<string, unknown>;
+}
+
+/** JSON Schema for the LAZY budget-only generation tool (baseTier only, no deltas). */
+export function budgetArchitectureJsonSchema(): Record<string, unknown> {
+  return zodToJsonSchema(GeneratedBudgetWireSchema, {
+    name: "GeneratedBudgetArchitecture",
+    target: "jsonSchema7",
+    $refStrategy: "none",
+  }) as Record<string, unknown>;
+}
+
+/** JSON Schema for the on-demand "+ Add tier" tool — one tier as a delta vs budget. */
+export function addTierJsonSchema(): Record<string, unknown> {
+  return zodToJsonSchema(GeneratedTierDeltaSchema, {
+    name: "GeneratedTierDelta",
     target: "jsonSchema7",
     $refStrategy: "none",
   }) as Record<string, unknown>;

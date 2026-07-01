@@ -42,6 +42,11 @@ export type ServiceKey =
   | "nat"
   | "dynamo"
   | "apigw"
+  | "cognito"
+  | "ses"
+  | "step-functions"
+  | "kinesis"
+  | "opensearch"
   | "unsupported";
 
 interface Rule {
@@ -59,6 +64,12 @@ const RULES: Rule[] = [
   { key: "postgres-selfmanaged", all: ["postgres"], any: ["self-managed", "self managed"] },
   { key: "rds", any: ["rds", "aurora"] },
   { key: "elasticache", any: ["elasticache"] },
+  // OpenSearch (a VPC-bound managed search cluster). "elasticsearch" is its former
+  // name; neither token contains "elasticache", so order vs the cache rule is free.
+  { key: "opensearch", any: ["opensearch", "elasticsearch"] },
+  // Step Functions (a state-machine orchestrator) — checked before the scheduler so a
+  // "workflow scheduler" state machine isn't misread as an EventBridge Scheduler clock.
+  { key: "step-functions", any: ["step functions", "step function", "sfn", "state machine"] },
   // Scheduler (a clock) is more specific than the bus and must be checked first;
   // both share the "eventbridge" token.
   { key: "eventbridge-scheduler", any: ["eventbridge scheduler", "scheduler"] },
@@ -72,6 +83,13 @@ const RULES: Rule[] = [
   { key: "xray", any: ["x-ray", "xray"] },
   { key: "sns", any: ["sns", "simple notification"] },
   { key: "sqs", any: ["sqs", "simple queue", "dead-letter queue"] },
+  // Kinesis data stream (event firehose). No earlier rule's token contains "kinesis".
+  { key: "kinesis", any: ["kinesis"] },
+  // Cognito user pool (the auth/login service).
+  { key: "cognito", any: ["cognito"] },
+  // SES (email delivery). "ses" is a broad substring, but no AWS service name checked
+  // earlier contains it, and secrets-manager (the only near-miss) is matched above.
+  { key: "ses", any: ["ses", "simple email"] },
   { key: "alb", any: ["application load balancer", "alb", "elastic load balancing"] },
   { key: "fargate", any: ["fargate", "ecs", "elastic container service"] },
   { key: "nat", any: ["nat gateway"] },

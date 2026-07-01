@@ -119,6 +119,52 @@ export function edgeIamStatements(node: ArchitectureNode, ctx: EmitCtx): Jsonish
         });
         needsKmsMain = true;
         break;
+      case "kinesis":
+        statements.push({
+          Sid: `Kinesis_${ttf}`,
+          Effect: "Allow",
+          Action: ["kinesis:PutRecord", "kinesis:PutRecords", "kinesis:DescribeStreamSummary"],
+          Resource: raw(`aws_kinesis_stream.${ttf}.arn`),
+        });
+        needsKmsMain = true;
+        break;
+      case "ses":
+        statements.push({
+          Sid: `SES_${ttf}`,
+          Effect: "Allow",
+          Action: ["ses:SendEmail", "ses:SendRawEmail"],
+          Resource: raw(`aws_sesv2_email_identity.${ttf}.arn`),
+        });
+        break;
+      case "cognito":
+        statements.push({
+          Sid: `Cognito_${ttf}`,
+          Effect: "Allow",
+          Action: [
+            "cognito-idp:AdminInitiateAuth",
+            "cognito-idp:AdminGetUser",
+            "cognito-idp:AdminCreateUser",
+            "cognito-idp:AdminRespondToAuthChallenge",
+          ],
+          Resource: raw(`aws_cognito_user_pool.${ttf}.arn`),
+        });
+        break;
+      case "step-functions":
+        statements.push({
+          Sid: `StartExecution_${ttf}`,
+          Effect: "Allow",
+          Action: "states:StartExecution",
+          Resource: raw(`aws_sfn_state_machine.${ttf}.arn`),
+        });
+        break;
+      case "opensearch":
+        statements.push({
+          Sid: `OpenSearch_${ttf}`,
+          Effect: "Allow",
+          Action: ["es:ESHttpGet", "es:ESHttpPost", "es:ESHttpPut", "es:ESHttpDelete"],
+          Resource: raw(`"\${aws_opensearch_domain.${ttf}.arn}/*"`),
+        });
+        break;
       case "postgres-selfmanaged": {
         // A localhost edge from the box ITSELF crosses no network — no grant. A Lambda
         // reaching the co-located Postgres tunnels in via SSM port-forward to the host.

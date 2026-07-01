@@ -13,8 +13,9 @@ import { emitS3, emitSecrets } from "./emitters/storage.js";
 import { emitEc2, emitLambda, emitPostgres } from "./emitters/compute.js";
 import { emitCloudfront } from "./emitters/cloudfront.js";
 import { emitScheduler } from "./emitters/scheduler.js";
-import { emitAlb, emitElasticache, emitFargate, emitRds } from "./emitters/managed.js";
+import { emitAlb, emitElasticache, emitFargate, emitOpenSearch, emitRds } from "./emitters/managed.js";
 import { emitApiGateway, emitDynamo } from "./emitters/serverless.js";
+import { emitCognito, emitKinesis, emitSes, emitStepFunctions } from "./emitters/integration.js";
 import {
   emitCloudtrail,
   emitCloudwatchAlarms,
@@ -56,4 +57,9 @@ export const REGISTRY: ReadonlyMap<ServiceKey, ServiceEmitter> = new Map<Service
   ["eventbridge-bus", emitEventbridgeBus],
   ["dynamo", emitDynamo],
   ["apigw", emitApiGateway],
+  ["cognito", emitCognito],
+  ["ses", emitSes],
+  ["step-functions", emitStepFunctions],
+  ["kinesis", emitKinesis],
+  ["opensearch", emitOpenSearch],
 ]);

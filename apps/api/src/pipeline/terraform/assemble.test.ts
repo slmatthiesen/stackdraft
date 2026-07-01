@@ -206,11 +206,11 @@ describe("deterministic Terraform — full dogfood coverage (both real designs)"
 describe("deterministic Terraform — hybrid fallback for unsupported services", () => {
   it("routes an unknown service to a TODO, lowers coverage, and STILL emits zero gaps", () => {
     const tier = budgetVocabularyTier(
-      [n("stream", "Amazon Kinesis Data Streams", "event firehose", ["KMS at rest"])],
-      [e("box", "stream")],
+      [n("msk", "Amazon Managed Streaming for Apache Kafka (MSK)", "event backbone", ["KMS at rest"])],
+      [e("box", "msk")],
     );
     const { code, coverage, gaps } = assembleTier(tier, { region: "us-east-1" });
-    expect(coverage.unsupported).toContain("stream");
+    expect(coverage.unsupported).toContain("msk");
     expect(coverage.ratio).toBeLessThan(1);
     expect(code).toContain("# TODO: unsupported service");
     expect(gaps).toEqual([]);

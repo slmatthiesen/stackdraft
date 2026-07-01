@@ -156,40 +156,41 @@ describe("annotateWireupGaps", () => {
 
 // --- Canned tier ------------------------------------------------------------
 
-// A tier built from services with NO deterministic emitter (Cognito + Kinesis), so it
+// A tier built from services with NO deterministic emitter (MSK + Neptune), so it
 // always routes to the LLM fallback — used to exercise the LLM path's spend/cache/error
-// behavior. (API Gateway + DynamoDB are now templated, hence not used here.)
+// behavior. (Cognito, Kinesis, API Gateway, DynamoDB are now templated, hence not used
+// here — pick services still outside the emitter vocabulary to force the fallback.)
 function balancedTier(): Tier {
   return {
     name: "balanced",
     summary: "balanced tier",
     nodes: [
       {
-        id: "auth",
-        awsService: "Amazon Cognito",
-        role: "user pool",
-        security: ["TLS", "MFA", "least-priv role"],
+        id: "kafka",
+        awsService: "Amazon MSK (Managed Streaming for Apache Kafka)",
+        role: "event backbone",
+        security: ["encryption at rest", "least-priv role"],
       },
       {
-        id: "stream",
-        awsService: "Amazon Kinesis Data Streams",
-        role: "event firehose",
-        security: ["encryption at rest", "least-priv role"],
+        id: "graphdb",
+        awsService: "Amazon Neptune",
+        role: "graph store",
+        security: ["private subnet", "least-priv role"],
       },
     ],
     edges: [
-      { from: "client", to: "auth", payload: "auth request", protocol: "HTTPS" },
-      { from: "auth", to: "stream", payload: "event record", protocol: "HTTPS" },
+      { from: "client", to: "kafka", payload: "event record", protocol: "TLS" },
+      { from: "kafka", to: "graphdb", payload: "graph write", protocol: "Bolt" },
     ],
-    costDrivers: [{ service: "Amazon Cognito", unit: "per MAU", estimateRange: "$0.00–$0.55", note: "" }],
+    costDrivers: [{ service: "Amazon MSK", unit: "per broker-hour", estimateRange: "$0.00–$0.55", note: "" }],
     delta: ["+ multi-AZ"],
     tradeoffs: ["vs resilient: cheaper, single-region"],
   };
 }
 
 // A FULLY-TEMPLATED tier (every service has a deterministic emitter) — used to
-// exercise the $0/instant deterministic path. API Gateway + DynamoDB (balancedTier)
-// have no emitters yet, so that tier still routes to the LLM fallback.
+// exercise the $0/instant deterministic path. `balancedTier` (MSK + Neptune) has no
+// emitters, so that tier still routes to the LLM fallback.
 function templatedTier(): Tier {
   return {
     name: "budget",
@@ -408,7 +409,7 @@ describe("POST /api/config — deterministic Terraform (TERRAFORM_DETERMINISTIC)
     await app.close();
   });
 
-  it("a tier with an unsupported service (Cognito + Kinesis) falls back to the LLM long tail", async () => {
+  it("a tier with an unsupported service (MSK + Neptune) falls back to the LLM long tail", async () => {
     const fake = makeFake();
     const { app } = await buildHarness(fake);
 

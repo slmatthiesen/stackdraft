@@ -1,4 +1,7 @@
 import type { GeneratedArchitecture, GeneratedTier, Clarification } from "../schema/architecture.js";
+import type { GenerateScope } from "./generateScope.js";
+
+export type { GenerateScope } from "./generateScope.js";
 
 /**
  * Token accounting surfaced by every provider call so the SpendLedger can debit
@@ -46,11 +49,21 @@ export interface LlmProvider {
   clarify(description: string, priorAnswers?: string[]): Promise<ProviderResult<Clarification>>;
 
   /**
-   * Generate the three-tier architecture as a validated typed graph (KTD3). The
-   * result OMITS the security floor — that reusable knowledge is injected
-   * deterministically downstream (see pipeline/securityFloor.ts), not generated.
+   * Generate the architecture as a validated typed graph (KTD3). The result OMITS the
+   * security floor — that reusable knowledge is injected deterministically downstream
+   * (see pipeline/securityFloor.ts), not generated.
+   *
+   * `scope` selects how MANY tiers are emitted (the lazy-per-tier cost/latency lever):
+   * `budget` (default caller behavior — one tier), `addTier` (one tier as a delta vs a
+   * budget baseline), or `full` (the original three tiers). Omitted → `full`, so the
+   * evals / stress test that call `generate(prompt, opts)` keep the three-tier shape.
+   * The returned `tiers` array is 1..3 accordingly.
    */
-  generate(prompt: GroundedPrompt, opts?: GenerateOptions): Promise<ProviderResult<GeneratedArchitecture>>;
+  generate(
+    prompt: GroundedPrompt,
+    opts?: GenerateOptions,
+    scope?: GenerateScope,
+  ): Promise<ProviderResult<GeneratedArchitecture>>;
 
   /**
    * Generate idiomatic, REFERENCE-ONLY Terraform (HCL) for a single tier of an

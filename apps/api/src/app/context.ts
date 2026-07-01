@@ -32,6 +32,7 @@ import { pricingFromConfig, type LlmPricing } from "../guards/spend.js";
 import type { TelemetrySink } from "../obs/telemetry.js";
 
 import { registerGenerateRoute } from "../routes/generate.js";
+import { registerAddTierRoute } from "../routes/addTier.js";
 import { registerClarifyRoute } from "../routes/clarify.js";
 import { registerConfigRoute } from "../routes/config.js";
 import { registerCuratedRoutes } from "../routes/curated.js";
@@ -137,6 +138,7 @@ export async function buildAppContext(
 /** Register both API route plugins against the shared context. */
 export async function registerApiRoutes(app: FastifyInstance, ctx: AppContext): Promise<void> {
   await registerGenerateRoute(app, ctx);
+  await registerAddTierRoute(app, ctx);
   await registerClarifyRoute(app, ctx);
   await registerConfigRoute(app, ctx);
   await registerCuratedRoutes(app, ctx);

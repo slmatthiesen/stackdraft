@@ -78,10 +78,13 @@ export function detectWireupGaps(hcl: string): WireupGap[] {
 
   // kms-key-policy — scoped to the services that genuinely NEED a service-principal
   // grant (Logs/SNS). DynamoDB/S3/SQS/EBS work via caller IAM, so a CMK for those
-  // alone does not require a service-principal key policy (would false-flag).
+  // alone does not require a service-principal key policy (would false-flag). A
+  // `kms_key_id` set to an AWS-MANAGED alias (`alias/aws/*`, e.g. a Kinesis stream's
+  // `alias/aws/kinesis`) is excluded — managed keys carry their own service grants, so
+  // an unrelated managed-alias encryption must not read as a CMK-encrypted log group.
   if (
     has(/resource\s+"aws_cloudwatch_log_group"/) &&
-    has(/kms_key_id/) &&
+    has(/kms_key_id\s*=\s*(?=\S)(?!"alias\/)/) &&
     !hasCmkKeyPolicy &&
     !has(/logs\.[a-z0-9-]+\.amazonaws\.com/)
   ) {

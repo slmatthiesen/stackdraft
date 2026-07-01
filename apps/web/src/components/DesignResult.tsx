@@ -26,25 +26,34 @@ export function DesignResult({
   result,
   selectedTier,
   onSelectTier,
+  onAddTier,
+  addingTier,
   feedback,
   generationId,
 }: {
   result: GenerateResponse;
   selectedTier: TierName;
   onSelectTier: (tier: TierName) => void;
+  /** Lazy per-tier (fix A): add balanced/resilient on demand from the tier tabs. Only
+   *  wired for a fresh result (Home); deep-linked designs render present tiers as-is. */
+  onAddTier?: (tier: TierName) => void;
+  addingTier?: TierName | null;
   feedback?: DesignFeedback;
   /** Stored-design id threaded into the Terraform pull so a re-pull is free. */
   generationId?: string;
 }): JSX.Element {
   return (
     <>
-      {/* Diagram leads: the tier tabs (Budget/Balanced/Resilient, Balanced
-          pre-selected) sit at the top so the design is visible immediately. */}
+      {/* Diagram leads: the tier tabs (Budget/Balanced/Resilient — Budget generated
+          first, the others added on demand) sit at the top so the design is visible
+          immediately. */}
       <TierTabs
         tiers={result.tiers}
         assumptions={result.assumptions}
         selected={selectedTier}
         onSelect={onSelectTier}
+        onAddTier={onAddTier}
+        addingTier={addingTier}
       />
 
       {/* Useful-design rating sits just above the key decisions — after the

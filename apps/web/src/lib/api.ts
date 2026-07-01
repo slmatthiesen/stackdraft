@@ -54,7 +54,13 @@ export type ConfigOutcome =
   | { kind: "config"; format: string; code: string }
   | { kind: "error"; status: number; code: string; message?: string };
 
+/** Discriminated result of `/api/generate/tier` (+ Add tier) — never throws. */
+export type AddTierOutcome =
+  | { kind: "tier"; tier: Tier }
+  | { kind: "error"; status: number; code: string; message?: string };
+
 const ENDPOINT = "/api/generate";
+const ADD_TIER_ENDPOINT = "/api/generate/tier";
 const CONFIG_ENDPOINT = "/api/config";
 
 export async function generate(
@@ -112,6 +118,57 @@ export async function generate(
 
 /** Resubmit answers to advance a clarification round — same endpoint as {@link generate}. */
 export const clarify = generate;
+
+export interface AddTierRequest {
+  description: string;
+  answers?: string[];
+  round?: number;
+  /** Which tier to add — balanced or resilient (budget comes from the initial generate). */
+  tier: TierName;
+  /** The already-generated budget tier — the baseline the new tier is a delta of. */
+  budgetTier: Tier;
+  /** Persisted-generation id so the added tier is merged into its stored body. */
+  generationId?: string;
+  turnstileToken?: string;
+}
+
+/**
+ * Add ONE tier (balanced/resilient) to a budget-first design on demand
+ * (`/api/generate/tier`, fix A). The server generates just that tier as a delta vs the
+ * budget baseline, prices it, and returns the single costed tier for the UI to append.
+ * Never throws for HTTP/transport errors.
+ */
+export async function addTier(
+  body: AddTierRequest,
+  fetchImpl: typeof fetch = fetch,
+): Promise<AddTierOutcome> {
+  let res: Response;
+  try {
+    res = await fetchImpl(ADD_TIER_ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { kind: "error", status: 0, code: "network_error" };
+  }
+
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    /* non-JSON body — fall through to code-by-status */
+  }
+
+  if (!res.ok) {
+    const obj = (data ?? {}) as { error?: string; message?: string };
+    return { kind: "error", status: res.status, code: obj.error ?? "unknown_error", message: obj.message };
+  }
+
+  const obj = (data ?? {}) as { tier?: Tier };
+  if (!obj.tier) return { kind: "error", status: res.status, code: "malformed_response" };
+  return { kind: "tier", tier: obj.tier };
+}
 
 /**
  * Generate a tier's reference Terraform ON DEMAND (`/api/config`). Slower than a
