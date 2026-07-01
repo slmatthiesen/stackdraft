@@ -10,11 +10,26 @@
  * `minItems`/`maxItems` bounds some providers reject. The zod schema still
  * enforces `.length(3)` etc. when validating the response.
  */
-import { architectureJsonSchema, clarificationJsonSchema } from "../schema/architecture.js";
+import {
+  addTierJsonSchema,
+  architectureJsonSchema,
+  budgetArchitectureJsonSchema,
+  clarificationJsonSchema,
+} from "../schema/architecture.js";
 
 /** Fully-prepped JSON Schema for the architecture tool/function, cached per call. */
 export function architectureToolSchema(): Record<string, unknown> {
   return resolveToolSchema(architectureJsonSchema());
+}
+
+/** Fully-prepped JSON Schema for the LAZY budget-only architecture tool/function. */
+export function budgetArchitectureToolSchema(): Record<string, unknown> {
+  return resolveToolSchema(budgetArchitectureJsonSchema());
+}
+
+/** Fully-prepped JSON Schema for the on-demand "+ Add tier" delta tool/function. */
+export function addTierToolSchema(): Record<string, unknown> {
+  return resolveToolSchema(addTierJsonSchema());
 }
 
 /** Fully-prepped JSON Schema for the clarification tool/function, cached per call. */

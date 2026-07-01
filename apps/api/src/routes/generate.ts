@@ -25,7 +25,7 @@ import { llmCostUsd, provisionalLlmCostUsdFromConfig, reserveSpend } from "../gu
 
 import { runClarify, roundCapReached } from "../pipeline/clarify.js";
 import { assembleGrounding } from "../pipeline/ground.js";
-import { generateArchitecture } from "../pipeline/generate.js";
+import { generateBudgetArchitecture } from "../pipeline/generate.js";
 import { isStructurallyComplete } from "../pipeline/completeness.js";
 import { retrieveSimilarDesigns, renderExemplars } from "../pipeline/retrieve.js";
 import { estimateCosts, trafficVolumeScale } from "../pipeline/cost.js";
@@ -264,7 +264,9 @@ async function handleGenerate(
       }
     }
 
-    const generated = await generateArchitecture({
+    // Lazy default (fix A): generate ONLY the budget tier (~⅓ the output → cheaper +
+    // faster). The user adds balanced/resilient on demand via POST /api/generate/tier.
+    const generated = await generateBudgetArchitecture({
       provider: ctx.provider,
       memory: ctx.stores.memory,
       description,

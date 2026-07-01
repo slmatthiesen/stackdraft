@@ -2,9 +2,10 @@ import Anthropic, { APIConnectionError, APIError, RateLimitError } from "@anthro
 import type { z } from "zod";
 
 import type { Config } from "../config.js";
-import { GeneratedWireSchema, ClarificationSchema, reconstructTiers } from "../schema/architecture.js";
+import { ClarificationSchema } from "../schema/architecture.js";
 import type { GeneratedArchitecture, Clarification, GeneratedTier } from "../schema/architecture.js";
-import { architectureToolSchema, clarificationToolSchema } from "./schema-utils.js";
+import { clarificationToolSchema } from "./schema-utils.js";
+import { resolveGenerateScope, type GenerateScope } from "./generateScope.js";
 import { renderTerraformWireupRules } from "./configPrompt.js";
 import { ProviderError } from "./provider.js";
 import type {
@@ -60,13 +61,6 @@ const CLARIFY_SYSTEM = [
   "the description is sufficient, return needsClarification=false with no questions.",
 ].join(" ");
 
-/** Tool the model MUST call to emit the generated architecture (forced tool use). */
-const ARCHITECTURE_TOOL = {
-  name: "emit_architecture",
-  description: "Emit the three-tier AWS architecture design as one structured object.",
-  input_schema: architectureToolSchema() as Anthropic.Tool.InputSchema,
-};
-
 /** Tool the model MUST call to emit its clarification verdict (forced tool use). */
 const CLARIFY_TOOL = {
   name: "emit_clarification",
@@ -108,8 +102,15 @@ export class ClaudeProvider implements LlmProvider {
   async generate(
     prompt: GroundedPrompt,
     opts?: GenerateOptions,
+    scope?: GenerateScope,
   ): Promise<ProviderResult<GeneratedArchitecture>> {
     const maxTokens = opts?.maxTokens ?? this.settings.maxTokens;
+    // The scope picks the tool (budget-only / add-one-tier / full three) so the model
+    // emits only what's asked — the lazy-per-tier cost/latency lever.
+    const resolved = resolveGenerateScope(scope);
+    const userText = resolved.extraUserContent
+      ? `${prompt.volatileSuffix}\n\n${resolved.extraUserContent}`
+      : prompt.volatileSuffix;
     // KTD11: the cache breakpoint sits ONLY on the static prefix (system prompt
     // + full security baselines). The volatile suffix follows in the user turn
     // with no cache_control, so the per-request content never poisons the key.
@@ -123,20 +124,24 @@ export class ClaudeProvider implements LlmProvider {
           cache_control: { type: "ephemeral" },
         },
       ],
-      messages: [
-        { role: "user", content: [{ type: "text", text: prompt.volatileSuffix }] },
-      ],
+      messages: [{ role: "user", content: [{ type: "text", text: userText }] }],
       // Forced tool use: the API guarantees the tool_use `input` is valid JSON
       // conforming to the schema. Reliable on Sonnet AND Haiku — unlike
       // output_config.format, which is not enforced for our model.
-      tools: [ARCHITECTURE_TOOL],
-      tool_choice: { type: "tool", name: ARCHITECTURE_TOOL.name },
+      tools: [
+        {
+          name: resolved.toolName,
+          description: resolved.toolDescription,
+          input_schema: resolved.toolSchema as Anthropic.Tool.InputSchema,
+        },
+      ],
+      tool_choice: { type: "tool", name: resolved.toolName },
     };
 
-    // The model emits the tier-delta WIRE shape; reconstruct the full three tiers
-    // here so callers always receive a complete GeneratedArchitecture.
-    const { result: wire, usage } = await this.structuredCall(params, GeneratedWireSchema);
-    return { result: reconstructTiers(wire), usage };
+    // The model emits a WIRE shape (per scope); reconstruct the tier(s) here so
+    // callers always receive a complete GeneratedArchitecture (1..3 tiers).
+    const { result: wire, usage } = await this.structuredCall(params, resolved.wireSchema);
+    return { result: resolved.reconstruct(wire), usage };
   }
 
   async clarify(
