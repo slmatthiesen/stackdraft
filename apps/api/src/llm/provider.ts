@@ -1,7 +1,9 @@
 import type { GeneratedArchitecture, GeneratedTier, Clarification } from "../schema/architecture.js";
 import type { GenerateScope } from "./generateScope.js";
+import type { ScannedItem } from "./streamScanner.js";
 
 export type { GenerateScope } from "./generateScope.js";
+export type { ScannedItem } from "./streamScanner.js";
 
 /**
  * Token accounting surfaced by every provider call so the SpendLedger can debit
@@ -33,12 +35,13 @@ export interface GroundedPrompt {
   volatileSuffix: string;
 }
 
-/** Progress signal for a streaming generation — a coarse output-size heartbeat so the
- *  UI can animate real motion during the long decode (fix D). `outputChars` is a
- *  monotonically-increasing count of structured-output characters emitted so far (an
- *  approximation, not billed tokens); dividing by ~4 gives a rough token estimate. */
+/** Progress signal for a streaming generation (fix D). `outputChars` is a monotonically-
+ *  increasing count of structured-output characters so far (a heartbeat, not billed
+ *  tokens; ÷4 ≈ tokens). `items` are design elements (services / decisions / edges) that
+ *  COMPLETED since the last callback, so the UI can show the design building live. */
 export interface GenerateProgress {
   outputChars: number;
+  items: ScannedItem[];
 }
 
 /** Cost ceiling for a single generation call. */

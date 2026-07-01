@@ -121,12 +121,20 @@ function toResultOutcome(data: unknown): ApiOutcome {
   };
 }
 
+/** A design element that completed mid-stream (fix D) — shown as the design "builds". */
+export interface StreamItem {
+  kind: "node" | "decision" | "edge";
+  label: string;
+}
+
 /** Live progress from a streaming generation (fix D). */
 export interface GenerateStreamHandlers {
   /** A named pipeline phase started (preparing / generating / costing / saving). */
   onPhase?: (step: string) => void;
   /** Output-size heartbeat during the decode — a rough char count (≈ tokens × 4). */
   onToken?: (chars: number) => void;
+  /** A design item (service / decision / edge) just completed in the stream. */
+  onItem?: (item: StreamItem) => void;
 }
 
 /**
@@ -187,7 +195,10 @@ export async function generateStream(
       if (!event) continue;
       if (event === "phase") handlers.onPhase?.(String((data as { step?: string }).step ?? ""));
       else if (event === "token") handlers.onToken?.(Number((data as { chars?: number }).chars ?? 0));
-      else if (event === "result") outcome = toResultOutcome(data);
+      else if (event === "item") {
+        const it = data as StreamItem;
+        if (it && it.label) handlers.onItem?.({ kind: it.kind, label: it.label });
+      } else if (event === "result") outcome = toResultOutcome(data);
       else if (event === "clarify") {
         const c = data as { questions?: string[]; round?: number };
         outcome = { kind: "clarify", questions: c.questions ?? [], round: c.round ?? 0 };

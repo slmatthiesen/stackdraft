@@ -297,9 +297,15 @@ async function handleGenerate(
       opts: {
         maxTokens: ctx.config.LLM_MAX_TOKENS,
         effort: ctx.config.LLM_EFFORT,
-        // Only when streaming: a live output-size heartbeat for the loading UI (forces
-        // the provider to stream the call — the budget output is under the size threshold).
-        onProgress: sse ? (p) => sse.event("token", { chars: p.outputChars }) : undefined,
+        // Only when streaming: a live heartbeat + the design items as they complete, so
+        // the loading UI shows the build (forces the provider to stream the call — the
+        // budget output is under the size threshold).
+        onProgress: sse
+          ? (p) => {
+              sse.event("token", { chars: p.outputChars });
+              for (const item of p.items) sse.event("item", item);
+            }
+          : undefined,
       },
       exemplarsSection,
     });

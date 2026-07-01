@@ -24,4 +24,23 @@ describe("LoadingDraft", () => {
     render(<LoadingDraft />);
     expect(screen.getByRole("status")).toHaveTextContent(/drafting your architecture/i);
   });
+
+  it("renders the live build list of streamed items (fix D)", () => {
+    render(
+      <LoadingDraft
+        phase="generating"
+        chars={0}
+        items={[
+          { kind: "decision", label: "Compute model" },
+          { kind: "node", label: "API Gateway" },
+          { kind: "node", label: "DynamoDB" },
+        ]}
+      />,
+    );
+    const list = screen.getByRole("list", { name: /design taking shape/i });
+    expect(list).toBeInTheDocument();
+    expect(screen.getByText("API Gateway")).toBeInTheDocument();
+    expect(screen.getByText("DynamoDB")).toBeInTheDocument();
+    expect(screen.getByText("Compute model")).toBeInTheDocument();
+  });
 });

@@ -33,21 +33,29 @@ const RESULT = JSON.stringify({
 });
 
 describe("generateStream (SSE, fix D)", () => {
-  it("reports phase + token progress and resolves the result outcome", async () => {
+  it("reports phase + token + item progress and resolves the result outcome", async () => {
     const frames =
       `event: phase\ndata: {"step":"preparing"}\n\n` +
       `event: phase\ndata: {"step":"generating"}\n\n` +
+      `event: item\ndata: {"kind":"decision","label":"Compute model"}\n\n` +
       `event: token\ndata: {"chars":480}\n\n` +
+      `event: item\ndata: {"kind":"node","label":"API Gateway"}\n\n` +
       `event: result\ndata: ${RESULT}\n\n`;
     const phases: string[] = [];
     const tokens: number[] = [];
+    const items: string[] = [];
     const out = await generateStream(
       { description: "an api" },
-      { onPhase: (s) => phases.push(s), onToken: (c) => tokens.push(c) },
+      {
+        onPhase: (s) => phases.push(s),
+        onToken: (c) => tokens.push(c),
+        onItem: (it) => items.push(`${it.kind}:${it.label}`),
+      },
       sseFetch(frames),
     );
     expect(phases).toEqual(["preparing", "generating"]);
     expect(tokens).toEqual([480]);
+    expect(items).toEqual(["decision:Compute model", "node:API Gateway"]);
     expect(out.kind).toBe("result");
     if (out.kind === "result") {
       expect(out.tiers.map((t) => t.name)).toEqual(["budget"]);

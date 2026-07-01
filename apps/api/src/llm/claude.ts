@@ -6,6 +6,8 @@ import { ClarificationSchema } from "../schema/architecture.js";
 import type { GeneratedArchitecture, Clarification, GeneratedTier } from "../schema/architecture.js";
 import { clarificationToolSchema } from "./schema-utils.js";
 import { resolveGenerateScope, type GenerateScope } from "./generateScope.js";
+import { StreamItemScanner } from "./streamScanner.js";
+import type { GenerateProgress } from "./provider.js";
 import { renderTerraformWireupRules } from "./configPrompt.js";
 import { ProviderError } from "./provider.js";
 import type {
@@ -207,7 +209,7 @@ export class ClaudeProvider implements LlmProvider {
   private async structuredCall<T>(
     params: Anthropic.MessageCreateParamsNonStreaming,
     schema: z.ZodType<T>,
-    onProgress?: (p: { outputChars: number }) => void,
+    onProgress?: (p: GenerateProgress) => void,
   ): Promise<ProviderResult<T>> {
     let lastError: unknown;
 
@@ -263,7 +265,7 @@ export class ClaudeProvider implements LlmProvider {
 
   private async callModel(
     params: Anthropic.MessageCreateParamsNonStreaming,
-    onProgress?: (p: { outputChars: number }) => void,
+    onProgress?: (p: GenerateProgress) => void,
   ): Promise<Anthropic.Message> {
     // Stream when a large output risks the SDK HTTP timeout OR when the caller wants a
     // live progress heartbeat (fix D) — the default budget generation is below the size
@@ -271,9 +273,11 @@ export class ClaudeProvider implements LlmProvider {
     if (onProgress || params.max_tokens >= STREAMING_THRESHOLD) {
       const stream = this.client.messages.stream(params);
       if (onProgress) {
-        // Count the forced-tool input JSON (and any text) as it streams. This is a
-        // coarse output-size proxy, not billed tokens — enough to animate real motion.
+        // As the forced-tool input JSON streams, count its size (a coarse output proxy,
+        // not billed tokens) AND surface each completed design item (service/decision/
+        // edge) so the UI can show the design building — not just a number climbing.
         let chars = 0;
+        const scanner = new StreamItemScanner();
         stream.on("streamEvent", (event) => {
           if (event.type !== "content_block_delta") return;
           const delta = event.delta;
@@ -281,7 +285,7 @@ export class ClaudeProvider implements LlmProvider {
             delta.type === "input_json_delta" ? delta.partial_json : delta.type === "text_delta" ? delta.text : "";
           if (piece) {
             chars += piece.length;
-            onProgress({ outputChars: chars });
+            onProgress({ outputChars: chars, items: scanner.push(piece) });
           }
         });
       }

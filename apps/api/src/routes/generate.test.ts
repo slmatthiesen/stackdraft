@@ -105,9 +105,10 @@ function makeFake(opts: FakeOpts = {}): Fake {
     ): Promise<ProviderResult<ArchitectureResult>> {
       calls.generate += 1;
       if (opts.generateError) throw new Error("upstream boom");
-      // Emulate the real provider's streaming heartbeat so SSE token events have data.
-      genOpts?.onProgress?.({ outputChars: 120 });
-      genOpts?.onProgress?.({ outputChars: 480 });
+      // Emulate the real provider's streaming heartbeat + item stream so SSE token/item
+      // events have data.
+      genOpts?.onProgress?.({ outputChars: 120, items: [{ kind: "decision", label: "Compute model" }] });
+      genOpts?.onProgress?.({ outputChars: 480, items: [{ kind: "node", label: "API Gateway" }] });
       const arch = opts.arch ?? validArchitecture();
       if (scope?.kind === "budget") {
         return { result: { ...arch, tiers: arch.tiers.filter((t) => t.name === "budget") }, usage: USAGE };
@@ -227,6 +228,10 @@ describe("POST /api/generate", () => {
     expect(body).toContain('"step":"generating"');
     expect(body).toContain("event: token");
     expect(body).toContain('"chars":480');
+    // Design items stream as they complete (the "building" feed).
+    expect(body).toContain("event: item");
+    expect(body).toContain('"kind":"decision"');
+    expect(body).toContain('"label":"API Gateway"');
     expect(body).toContain("event: result");
     // The terminal result frame carries the budget-only design.
     const resultFrame = body.slice(body.indexOf("event: result"));

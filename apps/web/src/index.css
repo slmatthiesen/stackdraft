@@ -1776,6 +1776,38 @@ body {
   opacity: 0.7;
 }
 
+/* The design building live (fix D) — each completed service/decision/edge slides in. */
+.drafting__items {
+  list-style: none;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: left;
+  max-width: 24rem;
+  margin-inline: auto;
+}
+.drafting__item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  animation: phase-fade 0.3s ease;
+}
+.drafting__item-glyph {
+  color: var(--brand-dark);
+}
+.drafting__item-label {
+  font-weight: 600;
+}
+.drafting__item-verb {
+  color: var(--muted);
+  font-size: 0.8rem;
+  opacity: 0.75;
+  margin-left: auto;
+}
+
 .drafting__note {
   color: var(--muted);
   font-size: 0.88rem;
