@@ -65,12 +65,12 @@ async function main(): Promise<void> {
       model: config.LLM_MODEL,
       region: config.DEFAULT_REGION,
       recommendedTier: design.recommendedTier,
-      tags: tagDesign(design),
+      tags: tagDesign(design, description),
       body: JSON.stringify(design),
       clientIp: "corpus-candidate",
     });
     persisted.push(id);
-    console.log(`✓ ${slug.padEnd(22)} 13/13 → ${id} (${status})  tags: ${tagDesign(design).join(", ")}`);
+    console.log(`✓ ${slug.padEnd(22)} 13/13 → ${id} (${status})  tags: ${tagDesign(design, description).join(", ")}`);
   }
 
   console.log(`\n${persisted.length}/${files.length} persisted.`);

@@ -89,12 +89,12 @@ async function main(): Promise<void> {
       model: config.LLM_MODEL,
       region: config.DEFAULT_REGION,
       recommendedTier: estimated.recommendedTier,
-      tags: tagDesign(estimated),
+      tags: tagDesign(estimated, p.description),
       body: JSON.stringify(estimated),
       clientIp: "corpus-script",
     });
     persisted.push(id);
-    console.log(`✓ ${p.id}  PASS 13/13 → ${id} (${status})  tags: ${tagDesign(estimated).join(", ")}  ($${cost.toFixed(3)})`);
+    console.log(`✓ ${p.id}  PASS 13/13 → ${id} (${status})  tags: ${tagDesign(estimated, p.description).join(", ")}  ($${cost.toFixed(3)})`);
   }
 
   console.log(`\n${persisted.length}/${prompts.length} persisted as pending · ~$${totalCost.toFixed(2)} spent`);

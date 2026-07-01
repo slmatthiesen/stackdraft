@@ -89,18 +89,22 @@ function queueResponses(...responses: Array<Response | Promise<Response>>): void
   generateQueue.push(...responses);
 }
 
-/** Only the non-curated (generate/clarify) fetch calls — what the assertions care about. */
+/** Only the generate/clarify fetch calls — excludes the landing page's on-mount
+ *  curated + community-gallery bootstrap loads, which the assertions don't care about. */
 function generateCalls(): unknown[][] {
-  return fetchMock.mock.calls.filter((c) => !String(c[0]).includes("/api/curated"));
+  return fetchMock.mock.calls.filter(
+    (c) => !String(c[0]).includes("/api/curated") && !String(c[0]).includes("/api/designs"),
+  );
 }
 
 beforeEach(() => {
   renderMock.mockClear();
   generateQueue = [];
   fetchMock = vi.fn((url: string) => {
-    // The landing page loads the curated gallery on mount; serve it an empty list so
-    // it doesn't consume a queued generate response.
+    // The landing page loads the curated gallery + community gallery on mount; serve
+    // each an empty list so neither consumes a queued generate response.
     if (String(url).includes("/api/curated")) return Promise.resolve(jsonResponse({ runs: [] }));
+    if (String(url).includes("/api/designs")) return Promise.resolve(jsonResponse({ designs: [] }));
     const next = generateQueue.shift();
     if (next === undefined) throw new Error(`unexpected fetch: ${url}`);
     return Promise.resolve(next);

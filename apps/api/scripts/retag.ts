@@ -15,20 +15,22 @@ function main(): void {
   const config = getConfig();
   const db = getDb(config.DB_PATH);
 
+  // Pass the original prompt/description too so domain tags (use-case axis) are as
+  // accurate on a retag as at write time — domains key off the prompt text, not just the body.
   const retagGen = db.prepare(`UPDATE generations SET tags_json = ? WHERE id = ?`);
-  const gens = db.prepare(`SELECT id, body_json FROM generations`).all() as { id: string; body_json: string }[];
+  const gens = db.prepare(`SELECT id, body_json, description FROM generations`).all() as { id: string; body_json: string; description: string }[];
   let genCount = 0;
   for (const g of gens) {
-    retagGen.run(JSON.stringify(tagsFromBody(g.body_json)), g.id);
+    retagGen.run(JSON.stringify(tagsFromBody(g.body_json, g.description)), g.id);
     genCount++;
   }
 
   // Same taxonomy so the gallery facets curated + user-generated designs uniformly.
   const retagCur = db.prepare(`UPDATE curated_runs SET tags_json = ? WHERE id = ?`);
-  const curated = db.prepare(`SELECT id, body FROM curated_runs`).all() as { id: string; body: string }[];
+  const curated = db.prepare(`SELECT id, body, prompt FROM curated_runs`).all() as { id: string; body: string; prompt: string }[];
   let curCount = 0;
   for (const c of curated) {
-    retagCur.run(JSON.stringify(tagsFromBody(c.body)), c.id);
+    retagCur.run(JSON.stringify(tagsFromBody(c.body, c.prompt)), c.id);
     curCount++;
   }
 
@@ -36,9 +38,9 @@ function main(): void {
   db.close();
 }
 
-function tagsFromBody(bodyJson: string): string[] {
+function tagsFromBody(bodyJson: string, description?: string): string[] {
   try {
-    return tagDesign(JSON.parse(bodyJson) as ArchitectureResult);
+    return tagDesign(JSON.parse(bodyJson) as ArchitectureResult, description);
   } catch {
     return [];
   }

@@ -67,4 +67,28 @@ describe("tagDesign", () => {
   it("FACETS is a non-empty vocabulary", () => {
     expect(FACETS.length).toBeGreaterThan(0);
   });
+
+  it("tags the ecommerce domain from the prompt", () => {
+    const tags = tagDesign(design(["Lambda", "DynamoDB", "SQS"]), "An order-processing system that decouples checkout from fulfillment using a queue.");
+    expect(tags).toContain("ecommerce");
+  });
+
+  it("tags the domain from node role text when no prompt is given", () => {
+    const d = {
+      recommendedTier: "balanced",
+      tiers: [
+        {
+          name: "balanced",
+          nodes: [{ id: "n0", awsService: "Lambda", role: "video-upload transcode worker", security: [] }],
+          delta: [],
+          tradeoffs: [],
+        },
+      ],
+    };
+    expect(tagDesign(d)).toContain("media");
+  });
+
+  it("adds no domain tag when nothing matches", () => {
+    expect(tagDesign(design(["Lambda", "DynamoDB"]))).not.toContain("ecommerce");
+  });
 });

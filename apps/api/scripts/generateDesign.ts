@@ -169,7 +169,7 @@ async function main(): Promise<void> {
       model: config.LLM_MODEL,
       region: config.DEFAULT_REGION,
       recommendedTier: estimated.recommendedTier,
-      tags: tagDesign(estimated),
+      tags: tagDesign(estimated, args.prompt),
       body: JSON.stringify(estimated),
       clientIp: "offline-script",
     });

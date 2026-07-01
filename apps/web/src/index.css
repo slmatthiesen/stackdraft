@@ -1124,12 +1124,45 @@ body {
 
 /* ---- community gallery (/gallery): facet chips, sort bar, card tag row ---- */
 
+.gallery__heading {
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+  text-align: center;
+}
+
 .gallery__filters {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   gap: 0.4rem;
   margin: 0 0 0.8rem;
+}
+
+.gallery__filter-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-right: 0.15rem;
+}
+
+.gallery__showall {
+  display: block;
+  margin: 0.9rem auto 0;
+  padding: 0.35rem 0.9rem;
+  background: none;
+  border: none;
+  color: var(--accent, var(--ink));
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.gallery__showall:hover,
+.gallery__showall:focus-visible {
+  text-decoration: underline;
 }
 
 .gallery__sortbar {

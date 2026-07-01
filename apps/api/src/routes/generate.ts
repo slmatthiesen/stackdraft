@@ -360,7 +360,7 @@ async function handleGenerate(
           model: ctx.config.LLM_MODEL,
           region: ctx.config.DEFAULT_REGION,
           recommendedTier: responseBody.recommendedTier,
-          tags: tagDesign(responseBody),
+          tags: tagDesign(responseBody, description),
           body: JSON.stringify(responseBody),
           clientIp: ip,
         });

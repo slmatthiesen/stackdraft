@@ -27,6 +27,7 @@ import { ClarifyForm } from "./components/ClarifyForm.js";
 import { CopyButton } from "./components/CopyButton.js";
 import { CuratedGallery } from "./components/CuratedGallery.js";
 import { DesignResult } from "./components/DesignResult.js";
+import { GalleryBrowser } from "./components/GalleryBrowser.js";
 import { GalleryView } from "./components/GalleryView.js";
 import { IntakeForm } from "./components/IntakeForm.js";
 import { LoadingDraft } from "./components/LoadingDraft.js";
@@ -430,6 +431,16 @@ function Home(): JSX.Element {
       )}
 
       {!submitted && <CuratedGallery entries={curated} loading={curatedLoading} onOpen={openCurated} />}
+
+      {!submitted && (
+        <section id="gallery" className="gallery" aria-label="Community designs">
+          <h2 className="gallery__heading">Community gallery</h2>
+          <p className="gallery__sub">
+            Real designs from the community — browse by type, open any one instantly, free.
+          </p>
+          <GalleryBrowser initialLimit={9} />
+        </section>
+      )}
 
       {!submitted && (
         <RecentDesigns
