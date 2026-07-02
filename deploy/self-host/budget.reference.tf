@@ -69,6 +69,18 @@ variable "container_port" {
   description = "Port the app container listens on (Fastify serves the SPA + /api on one port)."
 }
 
+variable "enable_langfuse" {
+  type        = bool
+  default     = false
+  description = "Create SSM SecureString placeholders for Langfuse LLM-observability keys (set the real values out-of-band, like the Anthropic key). Leave false to run without tracing — the app degrades to disabled cleanly."
+}
+
+variable "langfuse_base_url" {
+  type        = string
+  default     = "https://cloud.langfuse.com"
+  description = "Langfuse API base URL. EU cloud default; US = https://us.cloud.langfuse.com; or your self-hosted URL. Only used when the Langfuse keys are set."
+}
+
 variable "vpc_id" {
   type        = string
   description = "Existing VPC ID to deploy into."
@@ -911,6 +923,12 @@ resource "aws_instance" "app" {
 
     APP_KEY="$(aws ssm get-parameter --name /${var.project}/anthropic_api_key --with-decryption --region ${var.aws_region} --query Parameter.Value --output text)"
 
+    # Langfuse LLM-observability keys (OPTIONAL). Tolerant read: if the params don't
+    # exist (enable_langfuse=false, or not set), these resolve to empty and the app
+    # treats tracing as disabled (both keys are required to enable it) — no failure.
+    LF_PK="$(aws ssm get-parameter --name /${var.project}/langfuse_public_key --with-decryption --region ${var.aws_region} --query Parameter.Value --output text 2>/dev/null || true)"
+    LF_SK="$(aws ssm get-parameter --name /${var.project}/langfuse_secret_key --with-decryption --region ${var.aws_region} --query Parameter.Value --output text 2>/dev/null || true)"
+
     # The image declares VOLUME /app/data and defaults DB_PATH=/app/data/drafture.db,
     # so mount the host data volume there and let the image's own default stand.
     docker run -d --name ${var.project} --restart always \
@@ -918,6 +936,9 @@ resource "aws_instance" "app" {
       -v /data:/app/data \
       -e STORE_BACKEND=sqlite \
       -e ANTHROPIC_API_KEY="$APP_KEY" \
+      -e LANGFUSE_PUBLIC_KEY="$LF_PK" \
+      -e LANGFUSE_SECRET_KEY="$LF_SK" \
+      -e LANGFUSE_BASE_URL="${var.langfuse_base_url}" \
       ${var.container_image}
   EOF
   )
@@ -1006,6 +1027,44 @@ resource "aws_ssm_parameter" "anthropic_api_key" {
   type        = "SecureString"
   value       = "PLACEHOLDER_REPLACE_OUT_OF_BAND"
   description = "Anthropic API key — replace via: aws ssm put-parameter --overwrite"
+  tier        = "Standard"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+
+  tags = {
+    Project = var.project
+  }
+}
+
+# Langfuse LLM-observability keys (OPTIONAL — created only when enable_langfuse=true).
+# Placeholders: set the real values out-of-band, same as the Anthropic key:
+#   aws ssm put-parameter --overwrite --type SecureString --name /${project}/langfuse_public_key --value pk-lf-...
+#   aws ssm put-parameter --overwrite --type SecureString --name /${project}/langfuse_secret_key --value sk-lf-...
+resource "aws_ssm_parameter" "langfuse_public_key" {
+  count       = var.enable_langfuse ? 1 : 0
+  name        = "/${var.project}/langfuse_public_key"
+  type        = "SecureString"
+  value       = "PLACEHOLDER_REPLACE_OUT_OF_BAND"
+  description = "Langfuse public key — replace via: aws ssm put-parameter --overwrite"
+  tier        = "Standard"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+
+  tags = {
+    Project = var.project
+  }
+}
+
+resource "aws_ssm_parameter" "langfuse_secret_key" {
+  count       = var.enable_langfuse ? 1 : 0
+  name        = "/${var.project}/langfuse_secret_key"
+  type        = "SecureString"
+  value       = "PLACEHOLDER_REPLACE_OUT_OF_BAND"
+  description = "Langfuse secret key — replace via: aws ssm put-parameter --overwrite"
   tier        = "Standard"
 
   lifecycle {
@@ -1276,6 +1335,11 @@ output "ebs_volume_id" {
 output "ssm_parameter_anthropic_key_path" {
   description = "SSM Parameter Store path for Anthropic API key."
   value       = aws_ssm_parameter.anthropic_api_key.name
+}
+
+output "ssm_parameter_langfuse_key_paths" {
+  description = "SSM paths for the Langfuse keys (empty unless enable_langfuse=true). Set real values via: aws ssm put-parameter --overwrite."
+  value       = var.enable_langfuse ? [aws_ssm_parameter.langfuse_public_key[0].name, aws_ssm_parameter.langfuse_secret_key[0].name] : []
 }
 
 output "app_log_group_name" {

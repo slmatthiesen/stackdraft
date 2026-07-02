@@ -27,10 +27,20 @@ container_image = "<acct>.dkr.ecr.us-east-1.amazonaws.com/drafture:latest"
 # container_port = 8080        # the app listens here; host :80 maps to it
 # ebs_volume_size_gb = 20      # SQLite data volume
 
+# Langfuse LLM observability (OPTIONAL). true = create SSM placeholders for the two
+# keys (set the real values out-of-band, like the Anthropic key). false = no tracing.
+# enable_langfuse   = true
+# langfuse_base_url = "https://cloud.langfuse.com"   # EU; US = https://us.cloud.langfuse.com; or self-hosted
+
 # After apply:
 #   1. Set the Anthropic key (out-of-band, never in this file):
 #        aws ssm put-parameter --overwrite --type SecureString \
 #          --name /drafture/anthropic_api_key --value sk-ant-... --region us-east-1
 #      (use your `project` value in the path if you changed it from "budget"/"drafture")
+#   1b. (optional) If enable_langfuse=true, set the two Langfuse keys the same way:
+#        aws ssm put-parameter --overwrite --type SecureString \
+#          --name /drafture/langfuse_public_key --value pk-lf-... --region us-east-1
+#        aws ssm put-parameter --overwrite --type SecureString \
+#          --name /drafture/langfuse_secret_key --value sk-lf-... --region us-east-1
 #   2. Point a PROXIED Cloudflare DNS record at the `ec2_public_ip` output.
 #   3. Smoke test:  curl -s https://<your-domain>/api/health

@@ -53,9 +53,19 @@ tofu apply
 aws ssm put-parameter --overwrite --type SecureString \
   --name /drafture/anthropic_api_key --value sk-ant-... --region us-east-1
 
+# 3b. (optional) LLM observability — set enable_langfuse=true in tfvars, then set the keys:
+aws ssm put-parameter --overwrite --type SecureString \
+  --name /drafture/langfuse_public_key --value pk-lf-... --region us-east-1
+aws ssm put-parameter --overwrite --type SecureString \
+  --name /drafture/langfuse_secret_key --value sk-lf-... --region us-east-1
+
 # 4. Point a PROXIED Cloudflare record at the `ec2_public_ip` output, then smoke test
 curl -s https://<your-domain>/api/health     # -> {"status":"ok",...}
 ```
+
+LLM observability is optional and off by default. With `enable_langfuse = true` and the
+two keys set above, the box traces every LLM call (prompt, completion, tokens, USD cost,
+latency) to your Langfuse project. Without them the app runs identically, untraced.
 
 **Optional local smoke test before deploying** (proves the image serves with the deploy's
 env, $0, no AWS): from the repo root —
