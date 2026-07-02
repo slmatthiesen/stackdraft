@@ -1,6 +1,13 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      # Build-time web vars — baked into the SPA bundle by `vite build` (NOT read at
+      # runtime). Compose substitutes ${VAR} from the host .env automatically; unset →
+      # the client beacon / Sentry init stay no-ops.
+      args:
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+        VITE_CF_WEB_ANALYTICS_TOKEN: ${VITE_CF_WEB_ANALYTICS_TOKEN:-}
     ports:
       - "8080:8080"
     env_file:
