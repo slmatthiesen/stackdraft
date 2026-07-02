@@ -17,6 +17,14 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/kb/package.json packages/kb/package.json
 RUN pnpm install --frozen-lockfile || pnpm install
 COPY . .
+# Build-time web vars: declared as ARGs and exported to ENV so Vite sees them via
+# process.env during `vite build` (VITE_* are compiled INTO the bundle, never read at
+# runtime). Sourced from the host .env through docker-compose build.args. Empty/unset →
+# the client beacon + Sentry init are no-ops in the shipped SPA.
+ARG VITE_SENTRY_DSN
+ARG VITE_CF_WEB_ANALYTICS_TOKEN
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+ENV VITE_CF_WEB_ANALYTICS_TOKEN=$VITE_CF_WEB_ANALYTICS_TOKEN
 RUN pnpm --filter @drafture/web build \
     && pnpm --filter @drafture/api build
 
