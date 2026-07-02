@@ -65,13 +65,15 @@ export function DesignResult({
             role="group"
             aria-label="Rate this design"
           >
-            <span className="recommend__feedback-label">Useful design?</span>
+            <span className="recommend__feedback-label">
+              {feedback.rating !== null ? "Thanks — feedback saved!" : "Useful design?"}
+            </span>
             <button
               type="button"
               className={`recommend__thumb recommend__thumb--up${feedback.rating === 1 ? " recommend__thumb--on" : ""}`}
               aria-label="Good design"
               aria-pressed={feedback.rating === 1}
-              disabled={feedback.busy}
+              disabled={feedback.busy || feedback.rating !== null}
               onClick={() => feedback.onRate(1)}
             >
               👍
@@ -81,7 +83,7 @@ export function DesignResult({
               className={`recommend__thumb recommend__thumb--down${feedback.rating === -1 ? " recommend__thumb--on" : ""}`}
               aria-label="Needs improvement"
               aria-pressed={feedback.rating === -1}
-              disabled={feedback.busy}
+              disabled={feedback.busy || feedback.rating !== null}
               onClick={() => feedback.onRate(-1)}
             >
               👎
