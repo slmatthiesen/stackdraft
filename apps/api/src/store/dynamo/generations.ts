@@ -24,6 +24,7 @@ import {
 
 import type {
   GenerationRecord,
+  GenerationStats,
   GenerationStatus,
   GenerationSummary,
   GenerationUpsertResult,
@@ -33,6 +34,7 @@ import type {
 import type { Clock } from "../clock.js";
 import { systemClock } from "../clock.js";
 import type { DynamoDeps } from "./client.js";
+import { aggregateGenerationStats } from "../stats.js";
 
 const META = "meta";
 const MAX_VOTE_ATTEMPTS = 8;
@@ -369,5 +371,31 @@ export class DynamoGenerationsStore implements GenerationsStore {
       }
     }
     throw new Error(`generation vote contention exceeded ${MAX_VOTE_ATTEMPTS} attempts for ${id}`);
+  }
+
+  async usageStats(): Promise<GenerationStats> {
+    // Same single-Scan-over-meta-items precedent as listByStatus — the gallery is a few
+    // dozen rows today; revisit with pagination + a GSI once it grows past the 1MB page.
+    const res = await this.deps.doc.send(
+      new ScanCommand({
+        TableName: this.table,
+        FilterExpression: "sk = :meta",
+        ExpressionAttributeValues: { ":meta": META },
+        ProjectionExpression: "#status, createdAt, clientIp",
+        ExpressionAttributeNames: { "#status": "status" },
+      }),
+    );
+    const items = (res.Items ?? []) as Array<{
+      status?: string;
+      createdAt: number;
+      clientIp: string;
+    }>;
+    return aggregateGenerationStats(
+      items.map((i) => ({
+        status: i.status ?? "pending",
+        createdAtMs: i.createdAt,
+        clientIp: i.clientIp,
+      })),
+    );
   }
 }

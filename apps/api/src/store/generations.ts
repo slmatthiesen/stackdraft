@@ -18,6 +18,7 @@ import { randomBytes } from "node:crypto";
 
 import type {
   GenerationRecord,
+  GenerationStats,
   GenerationStatus,
   GenerationSummary,
   GenerationUpsertResult,
@@ -26,6 +27,7 @@ import type {
 } from "./types.js";
 import type { Db, Clock } from "./sqlite.js";
 import { systemClock } from "./sqlite.js";
+import { aggregateGenerationStats } from "./stats.js";
 
 interface GenRow {
   id: string;
@@ -271,5 +273,17 @@ export class SqliteGenerationsStore implements GenerationsStore {
       return { upvotes: counts.up, downvotes: counts.down, status };
     });
     return tx();
+  }
+
+  async usageStats(): Promise<GenerationStats> {
+    // Project only the three fields stats need (no body/terraform payload) and aggregate
+    // in JS via the shared utcDayKey — identical bucketing to the DynamoDB backend, and
+    // avoids any SQL ms-vs-s date-unit pitfall.
+    const rows = this.db
+      .prepare(`SELECT status, created_at, client_ip FROM generations`)
+      .all() as Array<{ status: string; created_at: number; client_ip: string }>;
+    return aggregateGenerationStats(
+      rows.map((r) => ({ status: r.status, createdAtMs: r.created_at, clientIp: r.client_ip })),
+    );
   }
 }

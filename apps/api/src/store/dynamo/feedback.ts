@@ -6,12 +6,13 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { UpdateCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 
-import type { FeedbackEntry, FeedbackStore } from "../types.js";
+import type { FeedbackEntry, FeedbackStats, FeedbackStore } from "../types.js";
 import type { Clock } from "../clock.js";
 import { systemClock } from "../clock.js";
 import type { DynamoDeps } from "./client.js";
+import { aggregateFeedbackStats } from "../stats.js";
 
 function pk(ip: string, promptHash: string): string {
   return `${ip}#${promptHash}`;
@@ -106,5 +107,16 @@ export class DynamoFeedbackStore implements FeedbackStore {
       }),
     );
     return (res.Items ?? []).map(toEntry);
+  }
+
+  async usageStats(): Promise<FeedbackStats> {
+    const res = await this.deps.doc.send(
+      new ScanCommand({
+        TableName: this.table,
+        ProjectionExpression: "rating, createdAt",
+      }),
+    );
+    const items = (res.Items ?? []) as Array<{ rating: number; createdAt: number }>;
+    return aggregateFeedbackStats(items.map((i) => ({ rating: i.rating, createdAtMs: i.createdAt })));
   }
 }

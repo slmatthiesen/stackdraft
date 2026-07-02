@@ -140,6 +140,23 @@ const ConfigSchema = z.object({
 
   // Static SPA build directory served by the API
   WEB_DIST: z.string().default("../web/dist"),
+
+  // Canonical public origin (no trailing slash) for absolute sitemap.xml URLs. Defaults
+  // to the production domain; override for preview deploys / forks.
+  SITE_ORIGIN: z.string().default("https://drafture.dev"),
+
+  // Operator-only product-usage report (GET /api/stats). Forker-safe: unset → the route
+  // 404s (off). When set, requests must carry `Authorization: Bearer <STATS_TOKEN>` (or
+  // `?token=` for a quick browser visit). Returns AGGREGATE COUNTS only — never raw IPs.
+  STATS_TOKEN: z.string().optional(),
+
+  // Sentry error monitoring (optional, forker-safe). Unset → disabled, zero overhead.
+  // sendDefaultPii=false and request bodies are NOT captured, so prompt text never leaves
+  // the box — only stack traces, URLs, and tags reach Sentry.
+  SENTRY_DSN: z.string().optional(),
+
+  // Sentry environment + release tags (purely labels on the issues, no runtime effect).
+  SENTRY_ENVIRONMENT: z.string().default("production"),
 }).superRefine((v, ctx) => {
   // Fail fast at config load if the SELECTED provider's key is missing. Keeps
   // forker-safe behavior (a bare clone still can't boot without a real key) while

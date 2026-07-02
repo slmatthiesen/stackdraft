@@ -285,4 +285,20 @@ describe("DynamoGenerationsStore", () => {
     const rec = await store.getById(g.id);
     expect(rec?.upvotes).toBe(1);
   });
+
+  it("usageStats aggregates totals, per-status, per-day, and unique IPs (no raw IPs)", async () => {
+    // 1970-01-01: two generations, one shared IP
+    await store.upsert({ ...input("pha"), clientIp: "1.1.1.1" });
+    await store.upsert({ ...input("phb"), clientIp: "2.2.2.2" });
+    // 1970-01-02: one generation reusing IP 1.1.1.1, then approved
+    clock.advance(DAY_MS);
+    const c = await store.upsert({ ...input("phc"), clientIp: "1.1.1.1" });
+    await store.setStatus(c.id, "approved");
+
+    const stats = await store.usageStats();
+    expect(stats.total).toBe(3);
+    expect(stats.byStatus).toEqual({ pending: 2, approved: 1, hidden: 0 });
+    expect(stats.byDay).toEqual({ "1970-01-01": 2, "1970-01-02": 1 });
+    expect(stats.uniqueIpsByDay).toEqual({ "1970-01-01": 2, "1970-01-02": 1 });
+  });
 });
