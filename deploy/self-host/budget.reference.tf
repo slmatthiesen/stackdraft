@@ -852,7 +852,7 @@ resource "aws_instance" "app" {
   # Root volume — minimal; data lives on attached EBS
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 8
+    volume_size           = 30
     encrypted             = true
     kms_key_id            = aws_kms_key.ebs.arn
     delete_on_termination = true
@@ -1091,7 +1091,7 @@ resource "aws_wafv2_web_acl" "cdn" {
   provider    = aws.us_east_1
   name        = "${var.project}-cdn-waf"
   scope       = "CLOUDFRONT"
-  description = "WAF for CloudFront distribution — managed rules."
+  description = "WAF for CloudFront distribution - managed rules."
 
   default_action {
     allow {}
