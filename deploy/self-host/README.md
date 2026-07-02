@@ -37,10 +37,11 @@ Cloudflare terminates TLS and proxies to `:80`.
 
 ```
 # 1. Build + push the image (from the repo root)
-docker build -t <acct>.dkr.ecr.us-east-1.amazonaws.com/drafture:latest .
+# The box is arm64 (t4g) — build for linux/arm64 or the box can't run it
+# ("no matching manifest for linux/arm64"). buildx --push builds + uploads in one step.
 aws ecr create-repository --repository-name drafture --region us-east-1   # once
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <acct>.dkr.ecr.us-east-1.amazonaws.com
-docker push <acct>.dkr.ecr.us-east-1.amazonaws.com/drafture:latest
+docker buildx build --platform linux/arm64 -t <acct>.dkr.ecr.us-east-1.amazonaws.com/drafture:latest --push .
 
 # 2. Plan + apply (tofu or terraform)
 cd deploy/self-host

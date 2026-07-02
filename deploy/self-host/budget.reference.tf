@@ -657,6 +657,27 @@ resource "aws_iam_role_policy_attachment" "cw_agent" {
 
 # Least-priv inline policy
 data "aws_iam_policy_document" "ec2_app_inline" {
+  # ECR — pull the app image at boot (private repo). GetAuthorizationToken must be
+  # resource "*"; the pull actions are scoped to this project's repo.
+  statement {
+    sid       = "ECRAuth"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+  statement {
+    sid    = "ECRPull"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchCheckLayerAvailability",
+    ]
+    resources = [
+      "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/${var.project}"
+    ]
+  }
+
   # SSM Parameter Store — read SecureStrings under /budget/
   statement {
     sid    = "SSMReadSecrets"
@@ -925,8 +946,10 @@ resource "aws_instance" "app" {
     dnf install -y docker
     systemctl enable --now docker
 
-    # If the image is in a private ECR repo, authenticate first:
-    #   aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin <acct>.dkr.ecr.${var.aws_region}.amazonaws.com
+    # Authenticate to ECR (the image is a private repo in this account); the instance
+    # role carries ecr:GetAuthorizationToken + pull. Registry host derived from the image.
+    ECR_REGISTRY="$(echo '${var.container_image}' | cut -d/ -f1)"
+    aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
     APP_KEY="$(aws ssm get-parameter --name /${var.project}/anthropic_api_key --with-decryption --region ${var.aws_region} --query Parameter.Value --output text)"
 
