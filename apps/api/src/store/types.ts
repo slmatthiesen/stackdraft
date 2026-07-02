@@ -170,6 +170,8 @@ export interface FeedbackStore {
   upsert(entry: Omit<FeedbackEntry, "id" | "createdAt" | "updatedAt">): Promise<FeedbackEntry>;
   /** Most-recently-updated entries filtered by rating (operator review script). */
   listByRating(rating: 1 | -1, limit: number): Promise<FeedbackEntry[]>;
+  /** Aggregate counts for the operator report — totals + per-UTC-day series. Counts only. */
+  usageStats(): Promise<FeedbackStats>;
 }
 
 /**
@@ -242,6 +244,29 @@ export interface GenerationVoteResult {
   upvotes: number;
   downvotes: number;
   status: GenerationStatus;
+}
+
+/**
+ * Aggregate product-usage counts for the operator-facing `/api/stats` report — totals,
+ * a per-status breakdown, and a per-UTC-day series. COUNTS ONLY: never raw IPs, ids, or
+ * prompt text. `uniqueIpsByDay` is a per-day cardinality (a count), not personal data.
+ */
+export interface GenerationStats {
+  total: number;
+  byStatus: { pending: number; approved: number; hidden: number };
+  /** UTC YYYY-MM-DD -> generations created that day. */
+  byDay: Record<string, number>;
+  /** UTC YYYY-MM-DD -> distinct client IPs that generated that day. */
+  uniqueIpsByDay: Record<string, number>;
+}
+
+/** Aggregate feedback (thumbs) counts for `/api/stats` — totals + per-UTC-day series. */
+export interface FeedbackStats {
+  total: number;
+  up: number;
+  down: number;
+  /** UTC YYYY-MM-DD -> verdicts that day split by rating. */
+  byDay: Record<string, { up: number; down: number }>;
 }
 
 /** Where an embedded design lives — its body is fetched from the matching store by id. */
@@ -336,4 +361,6 @@ export interface GenerationsStore {
    * hard-delete. Returns undefined if the generation does not exist.
    */
   vote(id: string, voter: string, value: 1 | -1, hideThreshold: number): Promise<GenerationVoteResult | undefined>;
+  /** Aggregate counts for the operator report — totals + per-UTC-day series. Counts only. */
+  usageStats(): Promise<GenerationStats>;
 }

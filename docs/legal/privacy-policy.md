@@ -44,14 +44,15 @@ We may select certain Generated Output for review by an operator and, if approve
 
 We do not sell your personal information. We share information with third-party service providers who process it on our behalf to operate the Service, including:
 
-- **Cloudflare** — provides edge TLS, content delivery, rate-limiting, and bot-mitigation/challenge services (including optional Turnstile). Cloudflare processes request data, including IP addresses, on our behalf.
+- **Cloudflare** — provides edge TLS, content delivery, rate-limiting, bot-mitigation/challenge services (including optional Turnstile), and Web Analytics. Cloudflare processes request data, including IP addresses, on our behalf. Its Web Analytics beacon measures **aggregate, cookieless** traffic (pageviews, visits, referrers, country, and device) and does **not** use cookies or track you across other sites.
+- **Sentry** — receives **error-monitoring data** (crash stack traces, the URL path, and basic browser/device metadata) when a client- or server-side error occurs, so we can diagnose and fix bugs. We configure Sentry with personal-data (PII) collection **off** and scrub request bodies before anything is sent, so **the text of your Submissions is not transmitted to Sentry**. Sentry may set a first-party cookie or local-storage entry used only for grouping similar errors; it does not track you across other sites.
 - **Our third-party AI model provider** — receives the content of your Submissions in order to generate the Generated Output. Their processing is governed by their own terms and privacy practices.
 
 We may also disclose information: (a) to comply with law, legal process, or lawful requests; (b) to enforce our Terms or protect the rights, safety, and security of the Service, our users, or the public; or (c) in connection with a merger, acquisition, financing, or sale of assets, subject to appropriate protections.
 
 ## 6. Cookies and Similar Technologies
 
-The Service is designed to operate without accounts and minimizes the use of cookies. Cloudflare and similar infrastructure providers may set cookies or use similar technologies necessary for security, load balancing, or bot mitigation (for example, a Turnstile challenge). *(Operator/counsel to confirm the specific cookies in use and update this section accordingly — **[COOKIES DETAIL]**.)*
+The Service is designed to operate without accounts and minimizes the use of cookies. Our visitor analytics (Cloudflare Web Analytics) is **cookieless** and does not require a consent banner. Cloudflare and similar infrastructure providers may set cookies or use similar technologies necessary for security, load balancing, or bot mitigation (for example, a Turnstile challenge). Sentry may set a first-party cookie or local-storage entry used only to group similar errors on this site. *(Operator/counsel to confirm the specific cookies in use and update this section accordingly — **[COOKIES DETAIL]**.)*
 
 ## 7. Data Retention
 

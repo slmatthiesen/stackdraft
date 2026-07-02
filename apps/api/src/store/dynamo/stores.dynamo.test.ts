@@ -250,6 +250,21 @@ describe("DynamoFeedbackStore", () => {
     const up = await store.listByRating(1, 10);
     expect(up.map((e) => e.ip)).toEqual(["2.2.2.2", "1.1.1.1"]);
   });
+
+  it("usageStats aggregates totals + per-day up/down (counts only, no raw IPs)", async () => {
+    const DAY = 86_400_000;
+    await store.upsert(entry("1.1.1.1", "ph1", 1)); // 1970-01-01, up
+    clock.advance(DAY);
+    await store.upsert(entry("2.2.2.2", "ph2", -1)); // 1970-01-02, down
+    await store.upsert(entry("3.3.3.3", "ph3", 1)); // 1970-01-02, up
+    const stats = await store.usageStats();
+    expect(stats).toEqual({
+      total: 3,
+      up: 2,
+      down: 1,
+      byDay: { "1970-01-01": { up: 1, down: 0 }, "1970-01-02": { up: 1, down: 1 } },
+    });
+  });
 });
 
 describe("DynamoDesignVectorStore", () => {

@@ -39,6 +39,8 @@ import { registerConfigRoute } from "../routes/config.js";
 import { registerCuratedRoutes } from "../routes/curated.js";
 import { registerDesignsRoutes } from "../routes/designs.js";
 import { registerFeedbackRoute } from "../routes/feedback.js";
+import { registerStatsRoute } from "../routes/stats.js";
+import { registerSeoRoutes } from "../routes/seo.js";
 
 /** The U8 guard chain, pre-instantiated so every request reuses the same windows/ledger. */
 export interface AppGuards {
@@ -149,4 +151,6 @@ export async function registerApiRoutes(app: FastifyInstance, ctx: AppContext): 
   await registerCuratedRoutes(app, ctx);
   await registerFeedbackRoute(app, ctx);
   await registerDesignsRoutes(app, ctx);
+  await registerStatsRoute(app, ctx);
+  await registerSeoRoutes(app, ctx);
 }

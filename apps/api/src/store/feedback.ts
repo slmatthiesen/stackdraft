@@ -12,9 +12,10 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { FeedbackEntry, FeedbackStore } from "./types.js";
+import type { FeedbackEntry, FeedbackStats, FeedbackStore } from "./types.js";
 import type { Db, Clock } from "./sqlite.js";
 import { systemClock } from "./sqlite.js";
+import { aggregateFeedbackStats } from "./stats.js";
 
 interface FeedbackRow {
   id: string;
@@ -80,6 +81,13 @@ export class SqliteFeedbackStore implements FeedbackStore {
       .prepare(`SELECT * FROM feedback WHERE rating = ? ORDER BY updated_at DESC LIMIT ?`)
       .all(rating, limit) as FeedbackRow[];
     return rows.map(toEntry);
+  }
+
+  async usageStats(): Promise<FeedbackStats> {
+    const rows = this.db
+      .prepare(`SELECT rating, created_at FROM feedback`)
+      .all() as Array<{ rating: number; created_at: number }>;
+    return aggregateFeedbackStats(rows.map((r) => ({ rating: r.rating, createdAtMs: r.created_at })));
   }
 }
 

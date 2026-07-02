@@ -6,6 +6,7 @@ import fastifyStatic from "@fastify/static";
 import { getConfig, type Config } from "./config.js";
 import { healthRoutes } from "./routes/health.js";
 import { registerApiRoutes, type AppContext } from "./app/context.js";
+import { initSentry, attachSentryErrorHandler } from "./obs/sentry.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -44,9 +45,12 @@ export async function buildServer(
 
 async function main(): Promise<void> {
   const config = getConfig();
+  // Init error monitoring before serving a single request; no-op when SENTRY_DSN is unset.
+  const sentryEnabled = initSentry(config);
   const { buildAppContext } = await import("./app/context.js");
   const ctx = await buildAppContext(config);
   const app = await buildServer(config, ctx);
+  attachSentryErrorHandler(app, sentryEnabled);
   try {
     await app.listen({ port: config.PORT, host: config.HOST });
   } catch (err) {
