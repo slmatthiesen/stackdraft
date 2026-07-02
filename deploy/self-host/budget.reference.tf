@@ -129,7 +129,14 @@ variable "cloudflare_ipv6_cidrs" {
 
 variable "static_site_domain" {
   type        = string
-  description = "Domain name served by CloudFront (e.g. app.example.com)."
+  default     = ""
+  description = "Custom domain for the CloudFront static CDN (e.g. app.example.com). Leave empty to serve the CDN on its default *.cloudfront.net cert — the single-box launch fronts the app with Cloudflare→EC2, so the CDN custom domain is optional."
+}
+
+variable "cdn_acm_certificate_arn" {
+  type        = string
+  default     = ""
+  description = "ARN of a validated us-east-1 ACM cert for static_site_domain. Empty → CloudFront uses its default cert and NO custom alias (required: AWS rejects an alias without a matching cert)."
 }
 
 variable "ebs_volume_size_gb" {
@@ -1217,7 +1224,9 @@ resource "aws_cloudfront_distribution" "spa" {
   price_class         = "PriceClass_100"
   web_acl_id          = aws_wafv2_web_acl.cdn.arn
 
-  aliases = [var.static_site_domain]
+  # An alias REQUIRES a matching ACM cert — only set it when one is provided, else
+  # AWS rejects the distribution. Empty cert → no alias, default cert (see below).
+  aliases = var.cdn_acm_certificate_arn != "" ? [var.static_site_domain] : []
 
   # S3 static assets origin
   origin {
@@ -1261,13 +1270,13 @@ resource "aws_cloudfront_distribution" "spa" {
     error_caching_min_ttl = 0
   }
 
-  # TLS — certificate must exist in us-east-1
+  # TLS — a custom alias needs an ACM cert in us-east-1; without one, fall back to the
+  # default *.cloudfront.net cert (valid because `aliases` is empty in that case).
   viewer_certificate {
-    # TODO: Set acm_certificate_arn to a validated ACM cert for var.static_site_domain
-    # acm_certificate_arn      = aws_acm_certificate_validation.cdn.certificate_arn
-    # ssl_support_method        = "sni-only"
-    # minimum_protocol_version  = "TLSv1.2_2021"
-    cloudfront_default_certificate = true # REPLACE with ACM cert above
+    cloudfront_default_certificate = var.cdn_acm_certificate_arn == ""
+    acm_certificate_arn            = var.cdn_acm_certificate_arn != "" ? var.cdn_acm_certificate_arn : null
+    ssl_support_method             = var.cdn_acm_certificate_arn != "" ? "sni-only" : null
+    minimum_protocol_version       = var.cdn_acm_certificate_arn != "" ? "TLSv1.2_2021" : null
   }
 
   logging_config {
